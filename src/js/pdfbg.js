@@ -5,6 +5,16 @@ import * as pdfjs from '../vendor/pdf.min.mjs';
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL('../vendor/pdf.worker.min.mjs', import.meta.url).href;
 
+const asset = (dir) => new URL(`../vendor/pdfjs/${dir}/`, import.meta.url).href;
+const DOC_OPTIONS = {
+  isEvalSupported: false,
+  cMapUrl: asset('cmaps'),
+  cMapPacked: true,
+  standardFontDataUrl: asset('standard_fonts'),
+  iccUrl: asset('iccs'),
+  wasmUrl: asset('wasm'),
+};
+
 const BUCKETS = [800, 1400, 2200, 3200];
 
 export class PdfBackgrounds {
@@ -21,7 +31,7 @@ export class PdfBackgrounds {
     if (!this.docs.has(entry)) {
       const bytes = this.entries[entry];
       // pdf.js transfers the buffer to its worker – hand it a copy so the bundle stays intact
-      this.docs.set(entry, pdfjs.getDocument({ data: bytes.slice(), isEvalSupported: false }).promise);
+      this.docs.set(entry, pdfjs.getDocument({ ...DOC_OPTIONS, data: bytes.slice() }).promise);
     }
     return this.docs.get(entry);
   }
@@ -64,7 +74,7 @@ export class PdfBackgrounds {
 
   /** Page sizes in PDF points, used when a PDF is turned into a new notebook. */
   static async pageSizes(bytes) {
-    const doc = await pdfjs.getDocument({ data: bytes.slice(), isEvalSupported: false }).promise;
+    const doc = await pdfjs.getDocument({ ...DOC_OPTIONS, data: bytes.slice() }).promise;
     const sizes = [];
     for (let i = 1; i <= doc.numPages; i++) {
       const vp = (await doc.getPage(i)).getViewport({ scale: 1 });

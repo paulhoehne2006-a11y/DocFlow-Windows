@@ -12,37 +12,39 @@
     "test": "node --test test/*.test.mjs",
     "dist": "electron-builder --win nsis portable --x64"
   },
-  "dependencies": {
+  "devDependencies": {
     "fflate": "0.8.3",
     "pdf-lib": "1.17.1",
-    "pdfjs-dist": "6.4.299"
-  },
-  "devDependencies": {
+    "pdfjs-dist": "6.4.299",
     "electron": "45.2.2",
     "electron-builder": "26.18.0"
   },
   "build": {
     "appId": "app.docflow.studio.windows",
     "productName": "DocFlow Studio",
-    "artifactName": "DocFlow-Studio-${version}-${arch}-${target}.${ext}",
     "files": [
       "main.js",
       "preload.js",
       "src/**/*",
-      "!src/**/*.map"
+      "!src/**/*.map",
+      "!src/js/demo-bridge.js"
     ],
     "directories": {
       "output": "dist"
     },
     "win": {
       "icon": "build/icon.png",
-      "signAndEditExecutable": false
+      "target": [
+        "nsis",
+        "portable"
+      ]
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "shortcutName": "DocFlow Studio"
+      "shortcutName": "DocFlow Studio",
+      "artifactName": "DocFlow-Studio-Setup-${version}.${ext}"
     },
     "fileAssociations": [
       {
@@ -50,6 +52,11 @@
         "name": "DocFlow Notizbuch",
         "description": "DocFlow Studio Notizbuch"
       }
-    ]
-  }
+    ],
+    "portable": {
+      "artifactName": "DocFlow-Studio-${version}-portable.${ext}"
+    },
+    "asar": false
+  },
+  "author": "DocFlow"
 }
