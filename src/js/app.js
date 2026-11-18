@@ -66,7 +66,7 @@ function toast(message, isError = false) {
   el.classList.toggle('error', isError);
   el.hidden = false;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { el.hidden = true; }, 3200);
+  toastTimer = setTimeout(() => { el.hidden = true; }, Math.max(3200, message.length * 55));
 }
 
 function saveSettings(patch) {
@@ -276,6 +276,7 @@ $('#btn-new').addEventListener('click', async () => {
   nb.fileName = uniqueFileName(result.title);
   await saveNotebook(nb, { quiet: true });
   await openNotebook(nb.fileName, nb);
+  hintGoogleNewNotebook();
 });
 
 $('#btn-open-pdf').addEventListener('click', async () => {
@@ -287,6 +288,7 @@ $('#btn-open-pdf').addEventListener('click', async () => {
     nb.fileName = uniqueFileName(picked.name);
     await saveNotebook(nb, { quiet: true });
     await openNotebook(nb.fileName, nb);
+    hintGoogleNewNotebook();
   } catch (err) {
     console.error(err);
     toast(t('pdfImportFailed'), true);
@@ -382,6 +384,15 @@ function ensureEditor() {
   stage.addEventListener('selectionchange', () => { $('#btn-delete-sel').hidden = !editor.selection; });
   buildToolbar();
   return editor;
+}
+
+/** New notebooks in a Google Drive folder stay invisible to the phone app – say so once per start. */
+let googleHintShown = false;
+function hintGoogleNewNotebook() {
+  if (state.info?.isGoogleDrive && !googleHintShown) {
+    googleHintShown = true;
+    setTimeout(() => toast(t('googleNewHint')), 600);
+  }
 }
 
 async function openNotebook(name, preloaded = null) {

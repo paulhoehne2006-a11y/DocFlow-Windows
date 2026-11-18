@@ -87,6 +87,13 @@ function detectFolders() {
   });
 }
 
+/** Folders mirrored by Google Drive for desktop ("Meine Ablage" / "My Drive"). */
+function isGoogleDriveFolder(folder) {
+  if (!folder) return false;
+  const lower = folder.toLowerCase();
+  return lower.includes('meine ablage') || lower.includes('my drive') || lower.includes('google drive');
+}
+
 function currentFolder() {
   const folder = readConfig().folder;
   if (folder) {
@@ -137,6 +144,7 @@ function registerIpc() {
     deviceId: deviceId(),
     folder: currentFolder(),
     settings: readConfig().settings ?? {},
+    isGoogleDrive: isGoogleDriveFolder(currentFolder()),
     openFile: pendingOpenFile,
   }));
 
@@ -201,12 +209,19 @@ function registerIpc() {
     }
   });
 
-  // Write to a hidden temp file first, then replace: the sync client never uploads half a file
+  // New files: write a hidden temp file, then rename, so no sync client uploads half a file.
+  // Existing files are overwritten in place: replacing them would give the file a new identity
+  // in Google Drive, and the phone app (which may only see files it created) would lose it.
   ipcMain.handle('file:write', async (_e, name, bytes) => {
     const file = resolveInFolder(name);
-    const tmp = path.join(path.dirname(file), `.${path.basename(file)}.${process.pid}.tmp`);
-    await fsp.writeFile(tmp, Buffer.from(bytes));
-    await fsp.rename(tmp, file);
+    const data = Buffer.from(bytes);
+    if (fs.existsSync(file)) {
+      await fsp.writeFile(file, data);
+    } else {
+      const tmp = path.join(path.dirname(file), `.${path.basename(file)}.${process.pid}.tmp`);
+      await fsp.writeFile(tmp, data);
+      await fsp.rename(tmp, file);
+    }
     return (await fsp.stat(file)).mtimeMs;
   });
 
