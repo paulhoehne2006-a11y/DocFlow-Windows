@@ -306,7 +306,7 @@ export function createNotebook({ title, deviceId, template = 'GRID_5MM', pdfByte
     originDeviceId: deviceId,
     notebook: {
       title,
-      coverColorArgb: 4280163870, // 0xFF1E293B
+      coverColorArgb: 4280166715, // 0xFF1E293B
       canvasMode: 'PAGES',
       defaultTemplate: template,
       pageCount: pages.length,
