@@ -17,4 +17,8 @@ const files = [
 for (const [from, to] of files) {
   cpSync(join(root, from), join(vendor, to));
 }
-console.log(`vendored ${files.length} files into src/vendor`);
+// Fonts, character maps, colour profiles and image decoders pdf.js loads on demand
+for (const dir of ['cmaps', 'standard_fonts', 'iccs', 'wasm']) {
+  cpSync(join(root, 'node_modules/pdfjs-dist', dir), join(vendor, 'pdfjs', dir), { recursive: true });
+}
+console.log(`vendored ${files.length} files and the pdf.js assets into src/vendor`);
