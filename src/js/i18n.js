@@ -95,6 +95,9 @@ const de = {
   exported: 'PDF gespeichert',
   pdfImportFailed: 'Die PDF konnte nicht gelesen werden.',
   imagesNotShown: 'Bilder aus der Handy-App werden auf Windows noch nicht angezeigt.',
+  refresh: 'Aktualisieren',
+  refreshNotebook: 'Neue Version vom Handy suchen',
+  noNewVersion: 'Keine neue Version vom Handy – du hast den aktuellen Stand.',
   googleNewHint: 'Hinweis: Mit Google Drive erscheint ein am PC neu angelegtes Notizbuch nicht auf dem Handy. Lege neue Notizbücher am besten am Handy an.',
 };
 
@@ -183,6 +186,9 @@ const en = {
   exported: 'PDF saved',
   pdfImportFailed: 'The PDF could not be read.',
   imagesNotShown: 'Images from the phone app are not shown on Windows yet.',
+  refresh: 'Refresh',
+  refreshNotebook: 'Check for a new version from your phone',
+  noNewVersion: 'No new version from your phone – you are up to date.',
   googleNewHint: 'Note: with Google Drive, a notebook created on this PC does not appear on your phone. Best create new notebooks on the phone.',
 };
 

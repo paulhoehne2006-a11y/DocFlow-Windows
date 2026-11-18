@@ -28,7 +28,7 @@ export async function createDemoBridge() {
     files.set('Arbeitsblatt_Scan.docflownote', { bytes: writeBundle(nb, { deviceId: 'phone-demo' }), modifiedAt: Date.now() - 60_000 });
   }
 
-  return {
+  const bridge = {
     async info() { return { version: 'demo', deviceId: 'windows-demo', folder, settings, openFile: null }; },
     async saveSettings(s) { settings = s; },
     async detectFolders() {
@@ -74,4 +74,6 @@ export async function createDemoBridge() {
     },
     _files: files,
   };
+  window.__demoBridge = bridge; // test hook
+  return bridge;
 }
