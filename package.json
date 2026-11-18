@@ -1,0 +1,55 @@
+{
+  "name": "docflow-studio-windows",
+  "productName": "DocFlow Studio",
+  "version": "1.0.0",
+  "description": "DocFlow Studio für Windows – Notizbücher vom Handy mit dem Stift bearbeiten",
+  "main": "main.js",
+  "private": true,
+  "license": "UNLICENSED",
+  "scripts": {
+    "postinstall": "node scripts/vendor.mjs",
+    "start": "electron .",
+    "test": "node --test test/*.test.mjs",
+    "dist": "electron-builder --win nsis portable --x64"
+  },
+  "dependencies": {
+    "fflate": "0.8.3",
+    "pdf-lib": "1.17.1",
+    "pdfjs-dist": "6.4.299"
+  },
+  "devDependencies": {
+    "electron": "45.2.2",
+    "electron-builder": "26.18.0"
+  },
+  "build": {
+    "appId": "app.docflow.studio.windows",
+    "productName": "DocFlow Studio",
+    "artifactName": "DocFlow-Studio-${version}-${arch}-${target}.${ext}",
+    "files": [
+      "main.js",
+      "preload.js",
+      "src/**/*",
+      "!src/**/*.map"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "icon": "build/icon.png",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "DocFlow Studio"
+    },
+    "fileAssociations": [
+      {
+        "ext": "docflownote",
+        "name": "DocFlow Notizbuch",
+        "description": "DocFlow Studio Notizbuch"
+      }
+    ]
+  }
+}
