@@ -1,0 +1,20 @@
+// Copies the browser builds of the runtime libraries next to the renderer code so the app
+// loads them via relative ES-module imports (works unpacked and inside the packaged app).
+import { cpSync, mkdirSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+const vendor = join(root, 'src', 'vendor');
+mkdirSync(vendor, { recursive: true });
+
+const files = [
+  ['node_modules/pdfjs-dist/build/pdf.min.mjs', 'pdf.min.mjs'],
+  ['node_modules/pdfjs-dist/build/pdf.worker.min.mjs', 'pdf.worker.min.mjs'],
+  ['node_modules/pdf-lib/dist/pdf-lib.esm.min.js', 'pdf-lib.esm.min.js'],
+  ['node_modules/fflate/esm/browser.js', 'fflate.js'],
+];
+for (const [from, to] of files) {
+  cpSync(join(root, from), join(vendor, to));
+}
+console.log(`vendored ${files.length} files into src/vendor`);
