@@ -246,3 +246,6 @@ svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width:
 @keyframes rise { from { opacity: 0; transform: translate(-50%, 8px); } }
 .setup-list > * { min-width: 0; }
 .setup-row .btn { flex: none; }
+
+.icon-btn.spinning svg { animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }

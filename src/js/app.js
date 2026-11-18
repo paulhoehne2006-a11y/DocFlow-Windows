@@ -140,12 +140,18 @@ async function showLibrary() {
   await refreshLibrary();
 }
 
-async function refreshLibrary() {
+/** Files only count as changed when their size differs: sync clients touch timestamps a lot. */
+const fileKey = (f) => `${f.name}@${f.size}`;
+
+async function refreshLibrary({ force = false } = {}) {
   const files = await bridge.listNotebooks();
+  const before = state.notebooks.map(fileKey).sort().join('|');
+  const after = files.map(fileKey).sort().join('|');
+  if (!force && before === after && state.notebooks.length > 0) return;
   const entries = [];
   for (const f of files) {
-    const known = state.notebooks.find((n) => n.name === f.name && n.modifiedAt === f.modifiedAt);
-    entries.push(known ?? { ...f, title: f.name.replace(/\.docflownote$/i, '').replace(/_/g, ' '), pageCount: null });
+    const known = state.notebooks.find((n) => fileKey(n) === fileKey(f));
+    entries.push(known ? { ...known, modifiedAt: f.modifiedAt } : { ...f, title: f.name.replace(/\.docflownote$/i, '').replace(/_/g, ' '), pageCount: null });
   }
   state.notebooks = entries;
   renderGrid();
@@ -163,7 +169,7 @@ function renderGrid() {
     const card = document.createElement('article');
     card.className = 'card';
     card.tabIndex = 0;
-    const cover = state.covers.get(`${n.name}@${n.modifiedAt}`);
+    const cover = state.covers.get(fileKey(n));
     card.innerHTML = `
       <div class="cover">${cover ? `<img src="${cover}" alt="">` : '<div class="cover-placeholder"></div>'}</div>
       <div class="card-body">
@@ -194,7 +200,7 @@ async function loadCovers() {
   const job = ++coverJob;
   for (const n of state.notebooks) {
     if (job !== coverJob || $('#library').hidden) return;
-    const key = `${n.name}@${n.modifiedAt}`;
+    const key = fileKey(n);
     if (state.covers.has(key)) continue;
     try {
       const { bytes } = await bridge.readFile(n.name);
@@ -343,15 +349,8 @@ async function saveCurrent() {
   setStatus('saving');
   try {
     // The phone may have uploaded a newer version in the meantime: merge instead of overwriting
-    const stat = await bridge.statFile(cur.name);
-    if (stat.exists && Math.abs(stat.modifiedAt - cur.mtime) > 1) {
-      const { bytes, modifiedAt } = await bridge.readFile(cur.name);
-      mergeRemote(cur.notebook, readBundle(bytes, cur.name));
-      cur.mtime = modifiedAt;
-      state.editor.open(cur.notebook, { keepView: true });
-      renderLayers();
-      toast(t('mergedRemote'));
-    }
+    await checkForPhoneVersion();
+    state.ownWriteAt = Date.now();
     cur.mtime = await saveNotebook(cur.notebook);
   } catch (err) {
     console.error(err);
@@ -721,29 +720,77 @@ document.addEventListener('keyup', (e) => {
   if (e.key === ' ' && state.editor) { state.editor.spaceDown = false; $('#stage').classList.remove('panning'); }
 });
 
-// ---- Sync folder changes ----
+// ---- New versions from the phone ----
+
+/**
+ * Looks at the open notebook's file and takes it over only when the phone (or another device)
+ * really wrote a newer version – not when the sync client merely touched the file or uploaded
+ * what this app saved. Returns 'none', 'reloaded' or 'merged'.
+ */
+async function checkForPhoneVersion() {
+  const cur = state.current;
+  if (!cur) return 'none';
+  const stat = await bridge.statFile(cur.name);
+  if (!stat.exists || Math.abs(stat.modifiedAt - cur.mtime) <= 1) return 'none';
+  const { bytes, modifiedAt } = await bridge.readFile(cur.name);
+  cur.mtime = modifiedAt;
+  let remote;
+  try {
+    remote = readBundle(bytes, cur.name);
+  } catch {
+    return 'none'; // still being written by the sync client – the next change event retries
+  }
+  const remoteVersion = remote.manifest.exportedAtMillis ?? 0;
+  const localVersion = cur.notebook.manifest.exportedAtMillis ?? 0;
+  if (remote.manifest.deviceId === state.info.deviceId || remoteVersion <= localVersion) return 'none';
+
+  if (cur.notebook.isDirty) {
+    mergeRemote(cur.notebook, remote);
+    state.editor.open(cur.notebook, { keepView: true });
+    renderLayers();
+    toast(t('mergedRemote'));
+    return 'merged';
+  }
+  cur.notebook = remote;
+  state.editor.open(cur.notebook, { keepView: true });
+  $('#nb-title').textContent = cur.notebook.title;
+  renderLayers();
+  updateHistory();
+  toast(t('reloadedRemote'));
+  return 'reloaded';
+}
 
 bridge.onFolderChanged(async (name) => {
   if (!name.toLowerCase().endsWith(BUNDLE_EXTENSION)) return;
   const cur = state.current;
   if (cur && name === cur.name) {
-    if (state.saving) return;
-    const stat = await bridge.statFile(name);
-    if (!stat.exists || Math.abs(stat.modifiedAt - cur.mtime) <= 1) return; // our own write
-    if (cur.notebook.isDirty) {
-      saveCurrent(); // merges before writing
-    } else {
-      const { bytes, modifiedAt } = await bridge.readFile(name);
-      cur.notebook = readBundle(bytes, name);
-      cur.mtime = modifiedAt;
-      state.editor.open(cur.notebook, { keepView: true });
-      $('#nb-title').textContent = cur.notebook.title;
-      renderLayers();
-      toast(t('reloadedRemote'));
-    }
+    if (state.saving || Date.now() - (state.ownWriteAt ?? 0) < 5000) return;
+    if ((await checkForPhoneVersion()) === 'merged') scheduleSave();
   } else if (!$('#library').hidden) {
     clearTimeout(state.refreshTimer);
-    state.refreshTimer = setTimeout(refreshLibrary, 400);
+    state.refreshTimer = setTimeout(() => refreshLibrary(), 600);
+  }
+});
+
+$('#btn-refresh-lib').addEventListener('click', async () => {
+  const btn = $('#btn-refresh-lib');
+  btn.classList.add('spinning');
+  try {
+    await refreshLibrary({ force: true });
+  } finally {
+    setTimeout(() => btn.classList.remove('spinning'), 500);
+  }
+});
+
+$('#btn-refresh').addEventListener('click', async () => {
+  const btn = $('#btn-refresh');
+  btn.classList.add('spinning');
+  try {
+    const result = await checkForPhoneVersion();
+    if (result === 'merged') scheduleSave();
+    if (result === 'none') toast(t('noNewVersion'));
+  } finally {
+    setTimeout(() => btn.classList.remove('spinning'), 500);
   }
 });
 
