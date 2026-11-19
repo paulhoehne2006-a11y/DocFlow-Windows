@@ -37,7 +37,6 @@
       "!playwright-report/**",
       "!test-results/**"
     ],
-    "electronDist": "node_modules/electron/dist",
     "directories": {
       "output": "dist"
     },
