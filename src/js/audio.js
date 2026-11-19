@@ -46,7 +46,33 @@ export class StudioAudioController {
     this.notebook = notebook;
     const list = notebook ? notebook.listAudioEntries() : [];
     this.activeEntryName = list[0]?.entryName ?? null;
+    this.activeIndex = list.length ? 0 : -1;
     this.emit();
+  }
+
+  /**
+   * Selects the [index]-th bookmark of `listAudioEntries()`. Android bookmarks can point into the
+   * middle of a recording (`offsetMs`), so the playhead is moved there without starting playback.
+   */
+  selectBookmark(index) {
+    const entries = this.notebook ? this.notebook.listAudioEntries() : [];
+    const bookmark = entries[index];
+    if (!bookmark) return;
+    this.activeIndex = index;
+    this.selectEntry(bookmark.entryName);
+    this.setPositionMs(bookmarkOffsetMs(bookmark));
+    this.emit();
+  }
+
+  /** Moves the playhead to [offsetMs] once the media metadata is available. */
+  setPositionMs(offsetMs) {
+    const targetSec = Math.max(0, (Number(offsetMs) || 0) / 1000);
+    const apply = () => {
+      const dur = this.audioEl.duration;
+      this.audioEl.currentTime = Number.isFinite(dur) && dur > 0 ? Math.min(dur, targetSec) : targetSec;
+    };
+    if (this.audioEl.readyState >= 1) apply();
+    else this.audioEl.addEventListener('loadedmetadata', apply, { once: true });
   }
 
   get currentOffsetMs() {
@@ -79,6 +105,7 @@ export class StudioAudioController {
       durationMs: this.durationMs,
       playbackRate: this.playbackRate,
       activeEntryName: this.activeEntryName,
+      activeIndex: this.activeIndex ?? -1,
       jumpMode: this.jumpMode,
       entries: this.notebook ? this.notebook.listAudioEntries() : [],
     });
@@ -139,6 +166,7 @@ export class StudioAudioController {
       durationMs,
     });
     this.activeEntryName = bookmark.entryName;
+    this.activeIndex = this.notebook.listAudioEntries().findIndex((e) => e.entryName === bookmark.entryName);
     this.emit();
     return bookmark;
   }
@@ -170,8 +198,13 @@ export class StudioAudioController {
     if (!entries.length) return;
     if (!this.activeEntryName || !this.notebook.entries[this.activeEntryName]) {
       this.activeEntryName = entries[0].entryName;
+      this.activeIndex = 0;
     }
-    if (!this.activeUrl) this.selectEntry(this.activeEntryName);
+    if (!this.activeUrl) {
+      this.selectEntry(this.activeEntryName);
+      const bookmark = entries[this.activeIndex] ?? entries.find((e) => e.entryName === this.activeEntryName);
+      if (bookmark) this.setPositionMs(bookmarkOffsetMs(bookmark));
+    }
     if (this.isPlaying) {
       this.audioEl.pause();
     } else {
@@ -221,6 +254,12 @@ export class StudioAudioController {
     this.cleanupStream();
     this.stopPlayback();
   }
+}
+
+/** Start position of a bookmark inside its recording; Windows recordings always start at 0. */
+export function bookmarkOffsetMs(bookmark) {
+  const v = Number(bookmark?.offsetMs);
+  return Number.isFinite(v) && v > 0 ? Math.round(v) : 0;
 }
 
 export function formatAudioTime(ms) {

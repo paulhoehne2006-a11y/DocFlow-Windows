@@ -25,7 +25,7 @@ const RX = {
   deleteForever: /Endgültig löschen|Delete forever/i,
   emptyTrash: /Papierkorb leeren|Empty trash/i,
   darkPaper: /Dark Paper/i,
-  marginNotes: /PDF-Notizrand|PDF Side Margin/i,
+  marginNotes: /Randnotizen|Margin notes/i,
   studyMode: /Lern-Modus|Study Mode/i,
   studyHideAll: /Alle verdecken|Hide all/i,
   studyRevealAll: /Alle aufdecken|Reveal all/i,
@@ -1126,7 +1126,8 @@ test.describe('Tier 1 — Feature Coverage', () => {
     // Draw on renamed layer
     const beforeDraw = await snapshotCanvas(canvas);
     await page.getByTestId('tool-pen').click();
-    await drawStroke(page, canvas, [[0.38, 0.42], [0.62, 0.42]]);
+    // Diagonal stroke: crosses many rows and columns of the 64×64 sample grid regardless of zoom
+    await drawStroke(page, canvas, [[0.36, 0.34], [0.64, 0.5]]);
     const drawn = await snapshotCanvas(canvas);
     expect(drawn.dataUrl).not.toBe(beforeDraw.dataUrl);
 
@@ -1972,6 +1973,104 @@ test.describe('Tier 4 — Real-World Application Scenarios', () => {
 
     await page.getByTestId('btn-close-split').click();
     await expect(secondary).toBeHidden();
+    guards.assertNoErrors();
+  });
+});
+
+// ============================================================================
+// Tier 5 — Cross-device state sync & OS integration (v2.0.1 audit fixes)
+// ============================================================================
+async function readDemoManifest(page, name) {
+  return page.evaluate(async (fileName) => {
+    const { inspectBundleSummary } = await import('/js/model.js');
+    const raw = await window.__demoBridge.readFile(fileName);
+    return inspectBundleSummary(raw instanceof Uint8Array ? raw : raw.bytes, fileName);
+  }, name);
+}
+
+test.describe('Tier 5 — Cross-Device Sync & OS Integration', () => {
+  test('T5-01: Favorite star on the PC is written into the bundle the phone reads', async ({ page }) => {
+    const guards = attachErrorGuards(page);
+    await enterStudio(page);
+    const name = 'Arbeitsblatt_Scan.docflownote';
+    expect((await readDemoManifest(page, name)).isFavorite).toBe(false);
+
+    const card = page.getByTestId('notebook-card').filter({ hasText: /Arbeitsblatt/ }).first();
+    await card.hover();
+    await card.locator('.fav-btn').click();
+    await expect.poll(async () => (await readDemoManifest(page, name)).isFavorite).toBe(true);
+
+    await page.getByTestId('notebook-card').filter({ hasText: /Arbeitsblatt/ }).first().locator('.fav-btn').click();
+    await expect.poll(async () => (await readDemoManifest(page, name)).isFavorite).toBe(false);
+    guards.assertNoErrors();
+  });
+
+  test('T5-02: Moving a notebook into a folder writes folderPath into the bundle', async ({ page }) => {
+    const guards = attachErrorGuards(page);
+    await enterStudio(page);
+    const name = 'Physik_Vorlesung.docflownote';
+    const card = page.getByTestId('notebook-card').filter({ hasText: /Physik/ }).first();
+    await card.hover();
+    await card.locator('.more-btn').click();
+    await page.getByRole('button', { name: RX.moveToFolder }).or(page.getByRole('menuitem', { name: RX.moveToFolder })).first().click();
+    const dlg = page.locator('dialog[open]').last();
+    await dlg.locator('select').selectOption({ label: 'Universität / Mathematik / Klausurvorbereitung' });
+    await dlg.getByRole('button', { name: RX.save }).click();
+
+    await expect.poll(async () => (await readDemoManifest(page, name)).folderPath)
+      .toBe('Universität / Mathematik / Klausurvorbereitung');
+    expect((await readDemoManifest(page, name)).folderId).toBe('fld_klausuren');
+    guards.assertNoErrors();
+  });
+
+  test('T5-03: A folder and star set on the phone show up in the PC library', async ({ page }) => {
+    const guards = attachErrorGuards(page);
+    await enterStudio(page);
+    await page.evaluate(async () => {
+      const { createNotebook, writeBundle } = await import('/js/model.js');
+      const nb = createNotebook({ title: 'Handy Notiz', deviceId: 'android-phone', template: 'LINED', folderPath: 'Handy / Biologie' });
+      nb.isFavorite = true;
+      window.__demoBridge._external('Handy_Notiz.docflownote', writeBundle(nb, { deviceId: 'android-phone' }));
+    });
+
+    const tree = page.getByTestId('folder-tree');
+    await expect(tree.getByText('Handy', { exact: true })).toBeVisible();
+    await expect(tree.getByText('Biologie', { exact: true })).toBeVisible();
+    await tree.getByText('Biologie', { exact: true }).click();
+    await expect(page.getByTestId('notebook-card').filter({ hasText: 'Handy Notiz' })).toHaveCount(1);
+    await page.getByTestId('nav-favorites').click();
+    await expect(page.getByTestId('notebook-card').filter({ hasText: 'Handy Notiz' })).toHaveCount(1);
+    guards.assertNoErrors();
+  });
+
+  test('T5-04: Double-clicking a .docflownote opens it (in place or as an imported copy)', async ({ page }) => {
+    const guards = attachErrorGuards(page);
+    await enterStudio(page);
+    const before = await page.getByTestId('notebook-card').count();
+
+    // Inside the synced folder: opens the notebook itself
+    await page.evaluate(() => window.__demoBridge._triggerOpenExternal('C:\\Users\\Demo\\OneDrive\\DocFlow Studio\\Physik_Vorlesung.docflownote'));
+    await expect(page.getByTestId('editor-view')).toBeVisible();
+    await expect(page.getByTestId('editor-title')).toContainText(/Physik/);
+
+    // From another folder: copied into the synced folder under a free name, never overwriting
+    await page.evaluate(() => window.__demoBridge._triggerOpenExternal('D:\\Downloads\\Physik_Vorlesung.docflownote'));
+    await expect.poll(async () => (await page.evaluate(async () => (await window.__demoBridge.listFiles()).length))).toBe(before + 1);
+    await expect(page.getByTestId('editor-title')).toContainText(/Physik/);
+    guards.assertNoErrors();
+  });
+
+  test('T5-05: Maximize button icon and label follow the window state', async ({ page }) => {
+    const guards = attachErrorGuards(page);
+    await enterStudio(page);
+    const btn = page.locator('#win-max');
+    await expect(btn).toHaveAttribute('data-maximized', 'false');
+    await btn.click();
+    await expect(btn).toHaveAttribute('data-maximized', 'true');
+    await expect(btn).toHaveAttribute('aria-label', /Wiederherstellen|Restore/);
+    await btn.click();
+    await expect(btn).toHaveAttribute('data-maximized', 'false');
+    await expect(btn).toHaveAttribute('aria-label', /Maximieren|Maximize/);
     guards.assertNoErrors();
   });
 });

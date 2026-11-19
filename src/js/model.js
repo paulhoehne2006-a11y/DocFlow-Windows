@@ -12,7 +12,10 @@ export const IMAGES_PREFIX = 'images/';
 export const AUDIO_PREFIX = 'audio/';
 export const DEFAULT_PAGE_WIDTH = 1654;
 export const DEFAULT_PAGE_HEIGHT = 2339;
-export const DEFAULT_MARGIN_WIDTH = 620;
+/** Margin-notes column width relative to the page width, identical to Android's MARGIN_NOTES_WIDTH_RATIO. */
+export const MARGIN_NOTES_WIDTH_RATIO = 0.42;
+/** Margin width for an A4 page (1654 px wide), the same value Android writes into `marginWidthPx`. */
+export const DEFAULT_MARGIN_WIDTH = Math.round(1654 * MARGIN_NOTES_WIDTH_RATIO);
 
 function resolveImageEntryKey(entries, imagePath) {
   if (!imagePath || !entries) return null;
@@ -147,6 +150,14 @@ export class Notebook {
     this.entries = entries; // every zip entry (Uint8Array), kept for lossless re-saving
     this.fileName = fileName;
     this.metaDirty = false;
+    /** Notebook-level manifest fields changed on this device since the last save. */
+    this.dirtyMetaKeys = new Set();
+  }
+
+  /** Marks manifest `notebook` fields as edited here, so a merge with a phone version keeps them. */
+  markMeta(...keys) {
+    for (const key of keys) this.dirtyMetaKeys.add(key);
+    this.metaDirty = true;
   }
 
   get title() {
@@ -157,7 +168,7 @@ export class Notebook {
     const next = String(v ?? '').trim();
     if (!next) return;
     this.manifest.notebook = { ...(this.manifest.notebook ?? {}), title: next };
-    this.metaDirty = true;
+    this.markMeta('title');
   }
 
   get originDeviceId() {
@@ -170,7 +181,7 @@ export class Notebook {
 
   set folderId(v) {
     this.manifest.notebook = { ...(this.manifest.notebook ?? {}), folderId: v || null };
-    this.metaDirty = true;
+    this.markMeta('folderId');
   }
 
   get folderPath() {
@@ -179,7 +190,7 @@ export class Notebook {
 
   set folderPath(v) {
     this.manifest.notebook = { ...(this.manifest.notebook ?? {}), folderPath: String(v ?? '') };
-    this.metaDirty = true;
+    this.markMeta('folderPath');
   }
 
   setFolder(folderId, folderPath = '') {
@@ -188,7 +199,7 @@ export class Notebook {
       folderId: folderId || null,
       folderPath: String(folderPath ?? ''),
     };
-    this.metaDirty = true;
+    this.markMeta('folderId', 'folderPath');
   }
 
   get coverColorArgb() {
@@ -197,7 +208,7 @@ export class Notebook {
 
   set coverColorArgb(v) {
     this.manifest.notebook = { ...(this.manifest.notebook ?? {}), coverColorArgb: v };
-    this.metaDirty = true;
+    this.markMeta('coverColorArgb');
   }
 
   get isFavorite() {
@@ -206,7 +217,7 @@ export class Notebook {
 
   set isFavorite(v) {
     this.manifest.notebook = { ...(this.manifest.notebook ?? {}), isFavorite: !!v };
-    this.metaDirty = true;
+    this.markMeta('isFavorite');
   }
 
   get canvasMode() {
@@ -217,7 +228,7 @@ export class Notebook {
     const next = mode === 'INFINITE' ? 'INFINITE' : 'PAGES';
     if (this.canvasMode === next) return;
     this.manifest.notebook = { ...(this.manifest.notebook ?? {}), canvasMode: next };
-    this.metaDirty = true;
+    this.markMeta('canvasMode');
   }
 
   get marginNotesEnabled() {
@@ -226,7 +237,7 @@ export class Notebook {
 
   set marginNotesEnabled(v) {
     this.manifest.notebook = { ...(this.manifest.notebook ?? {}), marginNotesEnabled: !!v };
-    this.metaDirty = true;
+    this.markMeta('marginNotesEnabled');
   }
 
   get marginWidthPx() {
@@ -238,7 +249,7 @@ export class Notebook {
     const n = Number(v);
     const width = Number.isFinite(n) && n > 0 ? Math.round(n) : DEFAULT_MARGIN_WIDTH;
     this.manifest.notebook = { ...(this.manifest.notebook ?? {}), marginWidthPx: width };
-    this.metaDirty = true;
+    this.markMeta('marginWidthPx');
   }
 
   get defaultTemplate() {
@@ -251,7 +262,7 @@ export class Notebook {
 
   set extractedHandwritingText(text) {
     this.manifest.notebook = { ...(this.manifest.notebook ?? {}), extractedHandwritingText: String(text || '') };
-    this.metaDirty = true;
+    this.markMeta('extractedHandwritingText');
   }
 
   get audioBookmarks() {
@@ -273,10 +284,10 @@ export class Notebook {
     return null;
   }
 
-  /** Total logical width of a page including optional PDF side margin notes. */
+  /** Total logical width of a page including the optional margin-notes column (every page, like Android). */
   pageTotalWidth(page) {
     if (this.canvasMode === 'INFINITE') return page.widthPx;
-    return this.marginNotesEnabled && this.backgroundOf(page)
+    return this.marginNotesEnabled
       ? page.widthPx + this.marginWidthPx
       : page.widthPx;
   }
@@ -670,6 +681,7 @@ export function writeBundle(notebook, { deviceId, exportedPdf = null, now = Date
   notebook.entries = entries;
   notebook.pages.forEach((p) => { p.dirty = false; });
   notebook.metaDirty = false;
+  notebook.dirtyMetaKeys?.clear();
   return bytes;
 }
 
@@ -759,19 +771,16 @@ export function mergeRemote(local, remote) {
 
   const localNb = local.manifest.notebook ?? {};
   const remoteNb = remote.manifest.notebook ?? {};
-  const mergedNotebook = local.metaDirty
-    ? {
-        ...remoteNb,
-        title: localNb.title !== undefined ? localNb.title : remoteNb.title,
-        isFavorite: localNb.isFavorite !== undefined ? localNb.isFavorite : remoteNb.isFavorite,
-        coverColorArgb: localNb.coverColorArgb !== undefined ? localNb.coverColorArgb : remoteNb.coverColorArgb,
-        folderId: localNb.folderId !== undefined ? localNb.folderId : remoteNb.folderId,
-        folderPath: localNb.folderPath !== undefined ? localNb.folderPath : remoteNb.folderPath,
-        marginNotesEnabled: localNb.marginNotesEnabled !== undefined ? localNb.marginNotesEnabled : remoteNb.marginNotesEnabled,
-        marginWidthPx: localNb.marginWidthPx !== undefined ? localNb.marginWidthPx : remoteNb.marginWidthPx,
-        extractedHandwritingText: localNb.extractedHandwritingText || remoteNb.extractedHandwritingText || '',
-      }
-    : { ...remoteNb };
+  // Only fields edited here since the last save override the phone's values; everything else
+  // (e.g. a favorite or folder set on the phone while the notebook is open here) comes from remote.
+  const dirtyKeys = local.dirtyMetaKeys ?? new Set();
+  const mergedNotebook = { ...remoteNb };
+  for (const key of dirtyKeys) {
+    if (localNb[key] !== undefined) mergedNotebook[key] = localNb[key];
+  }
+  if (dirtyKeys.has('extractedHandwritingText') && !localNb.extractedHandwritingText) {
+    mergedNotebook.extractedHandwritingText = remoteNb.extractedHandwritingText || '';
+  }
 
   const mergedAudio = [...(Array.isArray(remote.manifest.audioBookmarks) ? remote.manifest.audioBookmarks : [])];
   for (const bm of Array.isArray(local.manifest.audioBookmarks) ? local.manifest.audioBookmarks : []) {

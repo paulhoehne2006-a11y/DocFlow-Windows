@@ -1,7 +1,11 @@
 // Pure, Android-sync-safe Folder Hierarchy, Favorites, Sorting & Global OCR/Full-Text Search.
 // Because Android's StudioCloudSyncCoordinator scans `.docflownote` files flat inside
-// "DocFlow Studio", folders are stored cleanly as workspace metadata (`.docflow-workspace.json`)
-// and mirrored into `manifest.notebook.folderName/folderPath` without moving files into subfolders.
+// "DocFlow Studio", files never move into subfolders.
+//
+// Source of truth for a notebook's folder and favorite state is its bundle manifest
+// (`notebook.folderPath`, `notebook.folderId`, `notebook.isFavorite`), because that is the only
+// thing the phone reads and writes. `.docflow-workspace.json` only keeps what the bundles cannot
+// carry (folder colors, empty folders, the OCR index) plus a mirror of the bundle state.
 
 export const FOLDER_COLORS = [
   '#4F46E5', // Indigo (DocFlow Primary)
@@ -25,9 +29,14 @@ export const COVER_COLORS = [
   { hex: '#BE123C', argb: 0xffbe123c, name: 'Crimson' },
 ];
 
+/** Workspace format: 1 = folder/favorite state only in the workspace file, 2 = mirrored from bundles. */
+export const WORKSPACE_VERSION = 2;
+/** Separator of `notebook.folderPath`, identical to Android's StudioBundleMerge.FOLDER_PATH_SEPARATOR. */
+export const FOLDER_PATH_SEPARATOR = ' / ';
+
 export function emptyWorkspace() {
   return {
-    version: 1,
+    version: WORKSPACE_VERSION,
     folders: [], // [{ id, name, parentId, color, createdAt, updatedAt }]
     notebookFolders: {}, // { [fileName]: folderId }
     favorites: {}, // { [fileName]: boolean }
@@ -42,6 +51,7 @@ export function normalizeWorkspace(raw) {
   return {
     ...base,
     ...raw,
+    version: Number(raw.version) || 1,
     folders: Array.isArray(raw.folders) ? raw.folders.map((f) => ({
       id: String(f.id),
       name: String(f.name || 'Ordner').trim() || 'Ordner',
@@ -227,4 +237,120 @@ export function filterAndSortNotebooks(notebooks, ws, {
     return (b.modifiedAt || 0) - (a.modifiedAt || 0);
   });
   return list;
+}
+
+
+/** Splits a `folderPath` like "Uni / Mathe" into trimmed, non-empty segments. */
+export function parseFolderPath(path) {
+  return String(path ?? '')
+    .split('/')
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+const sameName = (a, b) => String(a).trim().localeCompare(String(b).trim(), undefined, { sensitivity: 'accent' }) === 0;
+
+/** Existing folder for the segments of a path (case-insensitive), or null. */
+export function findFolderByPath(ws, segments) {
+  let parent = null;
+  let found = null;
+  for (const name of segments) {
+    found = ws.folders.find((f) => (f.parentId ?? null) === parent && sameName(f.name, name)) ?? null;
+    if (!found) return null;
+    parent = found.id;
+  }
+  return found;
+}
+
+/**
+ * Folder for `folderPath`, creating every missing level (like Android's ensureFolderPath).
+ * Returns the folder id, or null for an empty path. Sets `ws.dirty` when folders were created.
+ */
+export function ensureFolderPath(ws, folderPath) {
+  const segments = parseFolderPath(folderPath);
+  if (!segments.length) return null;
+  let parent = null;
+  let folder = null;
+  for (const name of segments) {
+    folder = ws.folders.find((f) => (f.parentId ?? null) === parent && sameName(f.name, name)) ?? null;
+    if (!folder) {
+      folder = createFolder(ws, { name, parentId: parent });
+      ws.dirty = true;
+    }
+    parent = folder.id;
+  }
+  return folder.id;
+}
+
+/** Folder a library entry belongs to according to its bundle (path first, then a known id). */
+export function resolveBundleFolderId(ws, nb) {
+  const path = String(nb.folderPath || '').trim();
+  if (path) {
+    const byId = nb.folderId ? ws.folders.find((f) => f.id === nb.folderId) : null;
+    if (byId && sameName(getFolderPath(ws, byId.id), parseFolderPath(path).join(FOLDER_PATH_SEPARATOR))) return byId.id;
+    return ensureFolderPath(ws, path);
+  }
+  if (nb.folderId && ws.folders.some((f) => f.id === nb.folderId)) return nb.folderId;
+  return null;
+}
+
+/** The manifest fields that put a notebook into [folderId] (null = top level). */
+export function bundleFolderFields(ws, folderId) {
+  const valid = folderId && ws.folders.some((f) => f.id === folderId) ? folderId : null;
+  return { folderId: valid, folderPath: valid ? getFolderPath(ws, valid) : '' };
+}
+
+/**
+ * Brings the workspace in line with the folder/favorite state stored in the bundles.
+ *
+ * `notebooks` are library entries with `name`, `folderId`, `folderPath` and `isFavorite` read from
+ * each bundle. Returns the bundle writes that are still needed: on the first run after an update
+ * from workspace version 1, PC-only folder and favorite assignments are carried into the bundles
+ * so the phone sees them. Afterwards the bundles always win, because every local change is
+ * written into the bundle right away.
+ */
+export function reconcileWorkspaceWithBundles(ws, notebooks) {
+  const legacy = (Number(ws.version) || 1) < WORKSPACE_VERSION;
+  const writes = [];
+  let changed = legacy;
+  for (const nb of notebooks) {
+    const patch = {};
+    const legacyFolder = legacy ? ws.notebookFolders[nb.name] : null;
+    let folderId;
+    if (legacyFolder && ws.folders.some((f) => f.id === legacyFolder) && !String(nb.folderPath || '').trim()) {
+      folderId = legacyFolder;
+      Object.assign(patch, bundleFolderFields(ws, folderId));
+    } else {
+      folderId = resolveBundleFolderId(ws, nb);
+    }
+    if ((ws.notebookFolders[nb.name] ?? null) !== folderId) {
+      if (folderId) ws.notebookFolders[nb.name] = folderId;
+      else delete ws.notebookFolders[nb.name];
+      changed = true;
+    }
+
+    let favorite = !!nb.isFavorite;
+    if (legacy && ws.favorites[nb.name] === true && !favorite) {
+      favorite = true;
+      patch.isFavorite = true;
+    }
+    if (!!ws.favorites[nb.name] !== favorite) {
+      if (favorite) ws.favorites[nb.name] = true;
+      else delete ws.favorites[nb.name];
+      changed = true;
+    }
+    if (Object.keys(patch).length) writes.push({ name: nb.name, ...patch });
+  }
+  if (ws.dirty) changed = true;
+  delete ws.dirty;
+  ws.version = WORKSPACE_VERSION;
+  return { changed, writes };
+}
+
+/** Notebooks whose folder path changes when [folderId] (and its subfolders) is renamed or deleted. */
+export function notebooksInSubtree(ws, folderId) {
+  const subtree = getFolderSubtreeIds(ws, folderId);
+  return Object.entries(ws.notebookFolders)
+    .filter(([, id]) => subtree.has(id))
+    .map(([name]) => name);
 }

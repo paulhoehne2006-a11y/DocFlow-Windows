@@ -57,6 +57,7 @@ export const de = {
   movedToTrash: (t) => `„${t}“ in den Papierkorb verschoben`,
   restoredFromTrash: (t) => `„${t}“ wiederhergestellt`,
   loadFailed: (n) => `„${n}“ konnte nicht geöffnet werden`,
+  externalImported: (n) => `„${n}“ wurde in den DocFlow-Ordner übernommen`,
 
   // Cloud Overview & Sync Badges (matching Android claude/eager-wozniak-so4azi)
   cloudTitle: 'Studio in der Cloud',
@@ -141,7 +142,7 @@ export const de = {
   geodreieck: 'Geodreieck',
   geodreieckHint: 'Ziehen zum Verschieben · Ecken oder Mausrad zum Drehen · Stift rastet an der Kante ein',
   darkPaper: 'Dark Paper (Nachtpapier)',
-  marginNotes: 'PDF-Notizrand',
+  marginNotes: 'Randnotizen',
   studyMode: 'Lern-Modus (Abdeckbänder)',
   studyHideAll: 'Alle verdecken',
   studyRevealAll: 'Alle aufdecken',
@@ -386,6 +387,7 @@ export const en = {
   movedToTrash: (t) => `Moved “${t}” to trash`,
   restoredFromTrash: (t) => `Restored “${t}”`,
   loadFailed: (n) => `Could not open “${n}”`,
+  externalImported: (n) => `“${n}” was copied into the DocFlow folder`,
 
   cloudTitle: 'Studio in the Cloud',
   cloudSynced: 'Synced',
@@ -466,7 +468,7 @@ export const en = {
   geodreieck: 'Geodreieck / Ruler',
   geodreieckHint: 'Drag to move · Corners or wheel to rotate · Pen snaps along the edge',
   darkPaper: 'Dark Paper',
-  marginNotes: 'PDF Side Margin',
+  marginNotes: 'Margin notes',
   studyMode: 'Study Mode (Occlusion Tapes)',
   studyHideAll: 'Hide all',
   studyRevealAll: 'Reveal all',

@@ -188,7 +188,7 @@ export function drawPaper(ctx, template, w, h, { withRuling = true, darkPaper = 
   ctx.restore();
 }
 
-/** Collapsible annotation margin drawn right next to a PDF worksheet page. */
+/** Collapsible annotation margin drawn to the right of a page (PDF or paper). */
 export function drawMarginNotes(ctx, xStart, h, { width = DEFAULT_MARGIN_WIDTH, darkPaper = false, template = 'GRID_5MM' } = {}) {
   const P = paperPalette(darkPaper);
   ctx.save();

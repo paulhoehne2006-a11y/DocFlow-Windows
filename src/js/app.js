@@ -26,12 +26,15 @@ import {
   getFolderPath,
   buildFolderTree,
   filterAndSortNotebooks,
+  reconcileWorkspaceWithBundles,
+  bundleFolderFields,
+  notebooksInSubtree,
 } from './folders.js';
 import { Editor, INK_TOOLS, DEFAULT_TOOL_SETTINGS } from './editor.js';
 import { drawPaper, drawPageContent, drawTextBox, cssHexToArgb, argbToHex } from './render.js';
 import { PdfBackgrounds } from './pdfbg.js';
 import { EXPORT_LAYER_MODES, exportNotebookPdf, exportPagePng } from './export.js';
-import { StudioAudioController, formatAudioTime } from './audio.js';
+import { StudioAudioController, formatAudioTime, bookmarkOffsetMs } from './audio.js';
 import { recognizeStrokesOcr, indexNotebookText } from './ocr.js';
 
 const bridge = window.docflow ?? await (await import('./demo-bridge.js')).createDemoBridge();
@@ -189,6 +192,55 @@ async function persistWorkspace() {
   await bridge.writeWorkspace?.(state.workspace);
 }
 
+/**
+ * Writes a folder/favorite change into the notebook's own bundle, the only place the phone reads
+ * it from. [patch] holds `folderId` + `folderPath` and/or `isFavorite`.
+ */
+async function updateNotebookOrganization(name, patch) {
+  const apply = (nb) => {
+    if ('folderPath' in patch) nb.setFolder(patch.folderId ?? null, patch.folderPath ?? '');
+    if ('isFavorite' in patch) nb.isFavorite = !!patch.isFavorite;
+  };
+  const entry = state.notebooks.find((n) => n.name === name);
+  if (entry) {
+    if ('folderPath' in patch) {
+      entry.folderId = patch.folderId ?? null;
+      entry.folderPath = patch.folderPath ?? '';
+    }
+    if ('isFavorite' in patch) entry.isFavorite = !!patch.isFavorite;
+  }
+  try {
+    const cur = state.current;
+    if (cur?.name === name) {
+      apply(cur.notebook);
+      if (state.secondary?.name === name && state.secondary.notebook !== cur.notebook) apply(state.secondary.notebook);
+      await saveCurrent();
+      return;
+    }
+    if (state.secondary?.name === name && state.secondary.notebook) {
+      apply(state.secondary.notebook);
+      await saveSecondary();
+      return;
+    }
+    const raw = await bridge.readFile(name);
+    const nb = readBundle(raw instanceof Uint8Array ? raw : raw.bytes, name);
+    apply(nb);
+    state.ownWriteAt = Date.now();
+    await saveNotebook(nb, { quiet: true });
+    for (const tab of state.openTabs) if (tab.name === name) apply(tab.notebook);
+  } catch (err) {
+    console.error(err);
+    toast(`${t('saveFailed')}: ${err.message ?? err}`, true);
+  }
+}
+
+/** Rewrites the folder path of [names] after a folder above them was renamed, moved or deleted. */
+async function syncFolderAssignments(names) {
+  for (const name of names) {
+    await updateNotebookOrganization(name, bundleFolderFields(state.workspace, state.workspace.notebookFolders[name] ?? null));
+  }
+}
+
 /** Generic promise-based modal dialog using #dialog. */
 function dialog(title, build, okText = t('ok')) {
   const dlg = $('#dialog');
@@ -299,6 +351,22 @@ $('#tab-home').addEventListener('click', async () => {
 $('#tab-new-notebook').addEventListener('click', () => openNewNotebookModal());
 $('#win-min')?.addEventListener('click', () => bridge.windowMinimize?.());
 $('#win-max')?.addEventListener('click', () => bridge.windowMaximize?.());
+
+/** Keeps the maximize button's icon and label in sync with the real window state. */
+function renderMaximizeButton(maximized) {
+  const btn = $('#win-max');
+  if (!btn) return;
+  const label = t(maximized ? 'restoreWindow' : 'maximizeWindow');
+  btn.dataset.tTitle = maximized ? 'restoreWindow' : 'maximizeWindow';
+  btn.dataset.maximized = maximized ? 'true' : 'false';
+  btn.title = label;
+  btn.setAttribute('aria-label', label);
+  btn.innerHTML = maximized
+    ? '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="8" width="11" height="11" rx="1.5" /><path d="M8 8V6.5A1.5 1.5 0 019.5 5h8A1.5 1.5 0 0119 6.5v8a1.5 1.5 0 01-1.5 1.5H16" /></svg>'
+    : '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="1.5" /></svg>';
+}
+bridge.onWindowMaximized?.((maximized) => renderMaximizeButton(maximized));
+bridge.windowIsMaximized?.().then((m) => renderMaximizeButton(!!m)).catch(() => {});
 $('#win-close')?.addEventListener('click', () => bridge.windowClose?.());
 
 $('#btn-theme-cycle').addEventListener('click', () => {
@@ -388,7 +456,7 @@ async function refreshLibrary({ force = false } = {}) {
     for (const f of files) {
       const mtime = f.mtimeMs ?? f.modifiedAt ?? Date.now();
       const ctime = f.birthtimeMs ?? mtime;
-      const known = state.notebooks.find((n) => fileKey(n) === fileKey(f));
+      const known = state.notebooks.find((n) => fileKey(n) === fileKey(f) && n.modifiedAt === mtime);
       if (known) {
         entries.push({ ...known, modifiedAt: mtime, createdAt: ctime });
       } else {
@@ -407,6 +475,7 @@ async function refreshLibrary({ force = false } = {}) {
           coverColorArgb: summary?.coverColorArgb ?? COVER_COLORS[0].argb,
           isFavorite: summary?.isFavorite ?? false,
           folderId: summary?.folderId ?? null,
+          folderPath: summary?.folderPath ?? '',
           extractedHandwritingText: summary?.extractedHandwritingText ?? '',
           deviceId: summary?.deviceId ?? '',
           deviceName: summary?.deviceName ?? '',
@@ -415,6 +484,13 @@ async function refreshLibrary({ force = false } = {}) {
     }
     state.notebooks = entries;
   }
+
+  // Folder and favorite state lives in the bundles (the phone reads only those)
+  const { changed, writes } = reconcileWorkspaceWithBundles(state.workspace, state.notebooks);
+  // Patch the library entries first, so a refresh running meanwhile sees the same state
+  for (const { name, ...patch } of writes) Object.assign(state.notebooks.find((n) => n.name === name) ?? {}, patch);
+  if (changed) await persistWorkspace();
+  for (const { name, ...patch } of writes) await updateNotebookOrganization(name, patch);
 
   updateCountsAndFolderTree();
   renderGrid();
@@ -473,6 +549,7 @@ function renderFolderTree() {
         await persistWorkspace();
         updateCountsAndFolderTree();
         renderGrid();
+        await syncFolderAssignments(notebooksInSubtree(state.workspace, node.id));
       }
     });
 
@@ -485,6 +562,7 @@ function renderFolderTree() {
     delBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
       if (await confirmDialog(t('confirmDeleteFolder', node.name), t('deleteSelection'))) {
+        const affected = notebooksInSubtree(state.workspace, node.id);
         deleteFolder(state.workspace, node.id);
         if (state.activeFolderId === node.id) {
           state.activeFolderId = null;
@@ -493,6 +571,7 @@ function renderFolderTree() {
         await persistWorkspace();
         updateCountsAndFolderTree();
         renderGrid();
+        await syncFolderAssignments(affected);
       }
     });
 
@@ -516,6 +595,7 @@ function renderFolderTree() {
         await persistWorkspace();
         updateCountsAndFolderTree();
         renderGrid();
+        await syncFolderAssignments([nbName]);
       }
     });
 
@@ -657,6 +737,7 @@ function renderGrid() {
       await persistWorkspace();
       updateCountsAndFolderTree();
       renderGrid();
+      await updateNotebookOrganization(n.name, { isFavorite: !fav });
     });
 
     card.querySelector('.more-btn').addEventListener('click', (e) => {
@@ -733,6 +814,7 @@ function openCardMenu(anchor, nbEntry) {
     await persistWorkspace();
     updateCountsAndFolderTree();
     renderGrid();
+    await syncFolderAssignments([nbEntry.name]);
   });
   addItem(t('rename'), async () => {
     const nextTitle = await dialog(t('rename'), (body) => {
@@ -1993,13 +2075,15 @@ function renderAudioBar(st) {
     opt.textContent = t('audioNoRecordings');
     sel.appendChild(opt);
   } else {
-    for (const entry of st.entries) {
+    st.entries.forEach((entry, index) => {
       const opt = document.createElement('option');
-      opt.value = entry.entryName;
-      opt.textContent = entry.label || entry.fileName;
-      if (entry.entryName === st.activeEntryName) opt.selected = true;
+      opt.value = String(index);
+      const offset = bookmarkOffsetMs(entry);
+      const name = entry.label || entry.fileName;
+      opt.textContent = offset > 0 ? `${name} (${formatAudioTime(offset)})` : name;
+      if (index === st.activeIndex) opt.selected = true;
       sel.appendChild(opt);
-    }
+    });
   }
 }
 
@@ -2019,7 +2103,7 @@ $('#btn-audio-record').addEventListener('click', async () => {
 
 $('#btn-audio-play').addEventListener('click', () => ensureAudioController().togglePlay());
 $('#audio-entry-select').addEventListener('change', (e) => {
-  if (e.target.value) ensureAudioController().selectEntry(e.target.value);
+  if (e.target.value !== '') ensureAudioController().selectBookmark(Number(e.target.value));
 });
 $('#audio-rate-select').addEventListener('change', (e) => {
   ensureAudioController().setPlaybackRate(Number(e.target.value) || 1);
@@ -2544,20 +2628,37 @@ bridge.onWindowCloseRequested?.(async () => {
   }
 });
 
+const normDir = (p) => String(p || '').replace(/[\\/]+$/, '').replace(/\\/g, '/').toLowerCase();
+
+/**
+ * Opens a `.docflownote` passed by Explorer (double-click, "Open with", second instance).
+ * Files inside the synced folder open in place; files from anywhere else are copied into the
+ * synced folder under a free name first, so saving never overwrites a different notebook.
+ */
 async function openExternalBundlePath(filePath) {
-  if (!filePath || !bridge.readExternal) return;
+  if (!filePath || !bridge.readExternalFile) return;
   try {
-    const ext = await bridge.readExternal(filePath);
+    const ext = await bridge.readExternalFile(filePath);
     if (!ext?.bytes) return;
     const nb = readBundle(ext.bytes, ext.name);
-    await openNotebook(ext.name, nb);
+    const syncFolder = state.info?.syncFolder || state.info?.folder;
+    const inSyncFolder = !ext.dir || (syncFolder && normDir(ext.dir) === normDir(syncFolder));
+    if (inSyncFolder) {
+      await openNotebook(ext.name, nb);
+      return;
+    }
+    nb.fileName = uniqueFileName(nb.title || ext.name.replace(/\.docflownote$/i, ''));
+    await saveNotebook(nb, { quiet: true });
+    await refreshLibrary({ force: true });
+    await openNotebook(nb.fileName, nb);
+    toast(t('externalImported', nb.title));
   } catch (err) {
     console.error(err);
     toast(t('loadFailed', filePath), true);
   }
 }
 
-bridge.onOpenFile?.((filePath) => openExternalBundlePath(filePath));
+bridge.onOpenExternalFile?.((filePath) => openExternalBundlePath(filePath));
 
 // ---- Startup ----
 

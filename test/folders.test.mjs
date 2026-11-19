@@ -32,7 +32,7 @@ test('FOLDER_COLORS and COVER_COLORS expose 8 valid palette entries', () => {
 
 test('emptyWorkspace & normalizeWorkspace handle malformed inputs safely', () => {
   const empty = emptyWorkspace();
-  assert.equal(empty.version, 1);
+  assert.equal(empty.version, 2);
   assert.deepEqual(empty.folders, []);
   assert.deepEqual(empty.notebookFolders, {});
   assert.deepEqual(empty.favorites, {});

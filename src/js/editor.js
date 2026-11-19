@@ -640,7 +640,7 @@ export class Editor {
     const bgLayer = this.notebook.layers.find((l) => l.type === 'WORKSHEET');
     const bgVisible = !bgLayer || bgLayer.isVisible !== false;
     const totalW = this.notebook.pageTotalWidth(page);
-    const hasMargin = !this.isInfinite() && this.notebook.marginNotesEnabled && !!bg;
+    const hasMargin = !this.isInfinite() && this.notebook.marginNotesEnabled;
 
     if (bg && bgVisible) {
       drawPaper(ctx, page.template, page.widthPx, page.heightPx, { withRuling: false, darkPaper: this.darkPaper });

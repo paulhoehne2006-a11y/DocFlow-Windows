@@ -28,7 +28,7 @@ Galaxy Book mit S Pen, läuft aber auf jedem Windows-10/11-PC (Stift, Maus oder 
 > Dateien, die sie selbst angelegt hat: Notizbücher vom Handy kannst du am PC bearbeiten,
 > **neu am PC angelegte** Notizbücher erscheinen am Handy aber nur über OneDrive.
 
-## Flagship-Funktionen (v2.0.0)
+## Flagship-Funktionen (v2.0.x)
 
 * **1:1 Android Editorial Design & Windows Pro-Shell**:
   * 3 Farbschemata: *Anthracite Dark (`#0E1117`)*, *Crisp Editorial Light (`#F5F6FA`)* und *Pure OLED Schwarz (`#000000`)*
@@ -40,7 +40,7 @@ Galaxy Book mit S Pen, läuft aber auf jedem Windows-10/11-PC (Stift, Maus oder 
   * **Virtuelles Geodreieck**: Verschieben, Drehen (Ecken oder Mausrad), magnetisches Einrasten an der Zeichenkante
 * **Lern- & Studienfunktionen**:
   * **Dark Paper (Nachtpapier)** mit intelligenter Tinten- und PDF-Kontrastanpassung
-  * **PDF-Notizrand**: ausklappbare Notizspalte rechts neben PDF-Arbeitsblättern
+  * **Randnotizen**: ausklappbare Notizspalte rechts neben jeder Seite (PDF-Arbeitsblatt oder Papier), so breit wie am Handy
   * **Seiten-Modus (A4) & Endlos-Fläche (Infinite Canvas)** mit 7 Papiervorlagen (Blanko, Kariert, Liniert, Gepunktet, Cornell, Koordinaten, Noten)
   * **Lern-Abdeckband (`TAPE_OCCLUSION`) & Lern-Modus**: Formeln oder Vokabeln abdecken und per Klick einzeln oder gesammelt aufdecken
   * **Textboxen, Sticky Notes & Checklisten** sowie **eingebettete Bilder** (Verschieben, Skalieren, Drehen) und **Laserpointer**

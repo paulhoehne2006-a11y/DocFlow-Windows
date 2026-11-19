@@ -1,7 +1,7 @@
 {
   "name": "docflow-studio-windows",
   "productName": "DocFlow Studio",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "DocFlow Studio für Windows – Notizbücher vom Handy mit dem Stift bearbeiten",
   "main": "main.js",
   "private": true,

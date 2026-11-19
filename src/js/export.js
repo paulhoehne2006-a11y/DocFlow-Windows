@@ -263,7 +263,7 @@ export async function exportNotebookPdf(notebook, {
     const inf = isInfinite ? infiniteContentBounds(page) : { offsetX: 0, offsetY: 0, widthPx: page.widthPx, heightPx: page.heightPx };
     const rawMarginW = Number(notebook.marginWidthPx);
     const marginWidth = Number.isFinite(rawMarginW) && rawMarginW > 0 ? rawMarginW : DEFAULT_MARGIN_WIDTH;
-    const hasMargin = !isInfinite && notebook.marginNotesEnabled && !!rawBg;
+    const hasMargin = !isInfinite && notebook.marginNotesEnabled;
     const totalW = inf.widthPx + (hasMargin ? marginWidth : 0);
     const totalH = inf.heightPx;
 
@@ -436,7 +436,7 @@ export async function exportPagePng(notebook, pageIndex = 0, {
   const inf = isInfinite ? infiniteContentBounds(page) : { offsetX: 0, offsetY: 0, widthPx: page.widthPx, heightPx: page.heightPx };
   const rawMarginW = Number(notebook.marginWidthPx);
   const marginWidth = Number.isFinite(rawMarginW) && rawMarginW > 0 ? rawMarginW : DEFAULT_MARGIN_WIDTH;
-  const hasMargin = !isInfinite && notebook.marginNotesEnabled && !!rawBg;
+  const hasMargin = !isInfinite && notebook.marginNotesEnabled;
   const totalW = inf.widthPx + (hasMargin ? marginWidth : 0);
   const totalH = inf.heightPx;
 

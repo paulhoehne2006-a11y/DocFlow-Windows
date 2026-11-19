@@ -954,10 +954,12 @@ export async function createDemoBridge() {
 
     async readExternalFile(filePath) {
       const clean = String(filePath || '');
-      const base = clean.split(/[\\/]/).pop();
+      const parts = clean.split(/[\\/]/);
+      const base = parts.pop();
       const entry = base ? files.get(base) : null;
       if (!entry) throw new Error('External file not supported in browser demo');
-      return { name: base, bytes: new Uint8Array(entry.bytes) };
+      // Like main.js: the directory tells the app whether the file is inside the synced folder
+      return { name: base, dir: parts.join('\\') || folder, bytes: new Uint8Array(entry.bytes) };
     },
 
     async pickPdf() {
