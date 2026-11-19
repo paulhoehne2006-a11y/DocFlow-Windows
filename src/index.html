@@ -1,110 +1,590 @@
 <!doctype html>
-<html lang="de">
+<html lang="de" data-theme="anthracite">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' file:; script-src 'self' file: 'wasm-unsafe-eval'; style-src 'self' file: 'unsafe-inline'; img-src 'self' file: data: blob:; font-src 'self' file: data:; worker-src 'self' file: blob:; connect-src 'self' file: blob: data:">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' file:; script-src 'self' file: 'wasm-unsafe-eval'; style-src 'self' file: 'unsafe-inline'; img-src 'self' file: data: blob:; media-src 'self' file: data: blob:; font-src 'self' file: data:; worker-src 'self' file: blob:; connect-src 'self' file: blob: data:">
   <title>DocFlow Studio</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <!-- Setup: pick the synced cloud folder -->
-  <section id="setup" class="screen" hidden>
-    <div class="setup-card">
-      <div class="brand"><span class="logo"></span><span data-t="appName"></span></div>
-      <h1 data-t="setupTitle"></h1>
-      <p class="muted" data-t="setupText"></p>
-      <div id="setup-list" class="setup-list"></div>
-      <button id="setup-other" class="btn ghost" data-t="setupOther"></button>
-      <p class="hint" data-t="setupHintGoogle"></p>
+  <!-- Custom Frameless Window Titlebar & Multi-Tab Bar -->
+  <header class="titlebar" role="banner" data-testid="titlebar">
+    <div class="titlebar-brand">
+      <span class="logo" aria-hidden="true"></span>
+      <span class="brand-name" data-t="appName">DocFlow Studio</span>
     </div>
-  </section>
 
-  <!-- Library -->
-  <section id="library" class="screen" hidden>
-    <header class="topbar">
-      <div class="brand"><span class="logo"></span><span data-t="appName"></span></div>
-      <input id="search" class="search" type="search" data-t-placeholder="search">
-      <div class="spacer"></div>
-      <button id="btn-refresh-lib" class="icon-btn" data-t-title="refresh"><svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 10-2.3 5.7M20 4v7h-7" /></svg></button>
-      <button id="btn-open-pdf" class="btn ghost"><svg viewBox="0 0 24 24"><path d="M6 2h8l6 6v14H6z M14 2v6h6" /></svg><span data-t="openPdf"></span></button>
-      <button id="btn-new" class="btn primary"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg><span data-t="newNotebook"></span></button>
-    </header>
-    <div class="folder-bar">
-      <svg viewBox="0 0 24 24"><path d="M3 6h7l2 2h9v11H3z" /></svg>
-      <span id="folder-path" class="folder-path"></span>
-      <button id="btn-reveal" class="link" data-t="showFolder"></button>
-      <button id="btn-change-folder" class="link" data-t="changeFolder"></button>
+    <div id="tab-bar" class="tab-bar" role="tablist" aria-label="Notizbuch-Tabs" data-testid="tab-bar">
+      <div id="notebook-tabs" class="notebook-tabs"></div>
+      <button id="tab-home" class="tab active" role="tab" aria-selected="true" data-testid="tab-home" data-t-title="library">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5L12 3l9 7.5V20a1 1 0 01-1 1h-5v-6H9v6H4a1 1 0 01-1-1z" /></svg>
+        <span data-t="library">Bibliothek</span>
+      </button>
     </div>
-    <main id="grid" class="grid"></main>
-    <div id="empty" class="empty" hidden>
-      <div class="empty-art"></div>
-      <h2 data-t="emptyLibraryTitle"></h2>
-      <p class="muted" data-t="emptyLibraryText"></p>
-    </div>
-  </section>
 
-  <!-- Editor -->
-  <section id="editor" class="screen" hidden>
-    <header class="toolbar">
-      <button id="btn-back" class="icon-btn" data-t-title="back"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" /></svg></button>
-      <div class="title-wrap">
-        <div id="nb-title" class="nb-title"></div>
-        <div id="save-status" class="save-status"></div>
+    <button id="tab-new-notebook" class="icon-btn small" data-testid="tab-new-notebook" data-t-title="newNotebook" aria-label="Neues Notizbuch">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+    </button>
+
+    <div class="titlebar-drag"></div>
+
+    <div class="titlebar-actions">
+      <button id="btn-command-palette" class="cmd-trigger" data-testid="btn-command-palette" data-t-title="shortcutCommandPalette" aria-label="Befehlspalette öffnen">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
+        <span class="cmd-kbd" data-t="commandPaletteHint">Strg+K</span>
+      </button>
+      <button id="btn-theme-cycle" class="icon-btn small" data-testid="btn-theme-cycle" data-t-title="themeLabel" aria-label="Farbschema">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a6 6 0 009 9 9 9 0 11-9-9z" /></svg>
+      </button>
+      <button id="btn-settings" class="icon-btn small" data-testid="btn-settings" data-t-title="settings" aria-label="Einstellungen">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" /></svg>
+      </button>
+      <div class="win-controls">
+        <button id="win-min" class="win-btn" data-t-title="minimizeWindow" aria-label="Minimieren">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14" /></svg>
+        </button>
+        <button id="win-max" class="win-btn" data-t-title="maximizeWindow" aria-label="Maximieren">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="1.5" /></svg>
+        </button>
+        <button id="win-close" class="win-btn close" data-t-title="closeWindow" aria-label="Schließen">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
+        </button>
       </div>
-      <div class="sep"></div>
-      <div id="tools" class="tools"></div>
-      <div class="sep"></div>
-      <div id="tool-options" class="tool-options"></div>
-      <div class="spacer"></div>
-      <button id="btn-refresh" class="icon-btn" data-t-title="refreshNotebook"><svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 10-2.3 5.7M20 4v7h-7" /></svg></button>
-      <button id="btn-delete-sel" class="btn danger small" hidden data-t="deleteSelection"></button>
-      <button id="btn-undo" class="icon-btn" data-t-title="undo"><svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5M4 9h10a6 6 0 010 12h-3" /></svg></button>
-      <button id="btn-redo" class="icon-btn" data-t-title="redo"><svg viewBox="0 0 24 24"><path d="M15 14l5-5-5-5M20 9H10a6 6 0 000 12h3" /></svg></button>
-      <div class="sep"></div>
-      <button id="btn-layers" class="icon-btn" data-t-title="layers"><svg viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5z M3 13l9 5 9-5" /></svg></button>
-      <button id="btn-more" class="icon-btn" data-t-title="settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="12" cy="19" r="1.6" /></svg></button>
-    </header>
-    <div class="workspace">
-      <div id="stage" class="stage">
-        <canvas id="view"></canvas>
-        <canvas id="wet"></canvas>
-      </div>
-      <aside id="layers-panel" class="panel" hidden>
-        <div class="panel-head"><span data-t="layers"></span>
-          <button id="btn-add-layer" class="icon-btn small" data-t-title="addLayer"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg></button>
+    </div>
+  </header>
+
+  <main id="main-workspace" class="main-workspace">
+    <!-- Setup: pick the synced cloud folder -->
+    <section id="setup" class="screen" data-testid="setup-view" hidden>
+      <div class="setup-card">
+        <div class="brand"><span class="logo" aria-hidden="true"></span><span data-t="appName">DocFlow Studio</span></div>
+        <h1 data-t="setupTitle">Wo liegen deine Notizbücher?</h1>
+        <p class="muted" data-t="setupText"></p>
+        <div id="setup-list" class="setup-list"></div>
+        <div class="setup-actions">
+          <button id="setup-use-demo" class="btn primary" data-testid="setup-use-demo" data-t="setupUseDemo">Demo-Studio testen</button>
+          <button id="setup-other" class="btn ghost" data-t="setupOther">Anderen Ordner wählen …</button>
         </div>
-        <div id="layer-list" class="layer-list"></div>
-      </aside>
-      <div class="page-nav">
-        <button id="btn-zoom-out" class="icon-btn small" data-t-title="zoomOut"><svg viewBox="0 0 24 24"><path d="M5 12h14" /></svg></button>
-        <button id="btn-fit" class="pill" data-t-title="fitWidth"><span id="zoom-label">100 %</span></button>
-        <button id="btn-zoom-in" class="icon-btn small" data-t-title="zoomIn"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg></button>
-        <span class="sep"></span>
-        <span id="page-label" class="page-label"></span>
-        <button id="btn-add-page" class="icon-btn small" data-t-title="addPage"><svg viewBox="0 0 24 24"><path d="M6 2h8l6 6v14H6z M13 12v6M10 15h6" /></svg></button>
+        <p class="hint" data-t="setupHintGoogle"></p>
       </div>
-    </div>
-    <div id="more-menu" class="menu" hidden>
-      <button id="menu-export" data-t="exportPdf"></button>
-      <button id="menu-fullscreen" data-t="fullscreen"></button>
-      <label class="check"><input id="opt-barrel" type="checkbox"><span data-t="barrelErases"></span></label>
-      <label class="check"><input id="opt-finger" type="checkbox"><span data-t="fingerDraws"></span></label>
-    </div>
-  </section>
+    </section>
 
-  <dialog id="dialog" class="dialog">
-    <form method="dialog" id="dialog-form">
-      <h2 id="dialog-title"></h2>
-      <div id="dialog-body"></div>
+    <!-- Library View -->
+    <section id="library" class="screen library-screen" data-testid="library-view" hidden>
+      <div class="library-layout">
+        <aside id="sidebar" class="sidebar" data-testid="sidebar" aria-label="Bibliothek Navigation">
+          <nav class="sidebar-nav" aria-label="Filter">
+            <button id="nav-all" class="nav-item active" data-filter="all" data-testid="nav-all">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4z M4 10h16" /></svg>
+              <span data-t="allNotebooks">Alle Notizen</span>
+              <span id="count-all" class="badge">0</span>
+            </button>
+            <button id="nav-favorites" class="nav-item" data-filter="favorites" data-testid="nav-favorites">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z" /></svg>
+              <span data-t="favorites">Favoriten</span>
+              <span id="count-favorites" class="badge">0</span>
+            </button>
+            <button id="nav-recent" class="nav-item" data-filter="recent" data-testid="nav-recent">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 3" /></svg>
+              <span data-t="recent">Zuletzt</span>
+            </button>
+            <button id="nav-trash" class="nav-item" data-filter="trash" data-testid="nav-trash">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16 M9 7V4h6v3 M6 7l1 13h10l1-13" /></svg>
+              <span data-t="trash">Papierkorb</span>
+              <span id="count-trash" class="badge">0</span>
+            </button>
+          </nav>
+
+          <div class="sidebar-section">
+            <div class="sidebar-head">
+              <span data-t="folders">Ordner</span>
+              <button id="btn-new-folder" class="icon-btn small" data-testid="btn-new-folder" data-t-title="newFolder" aria-label="Neuer Ordner">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+              </button>
+            </div>
+            <div id="folder-tree" class="folder-tree" data-testid="folder-tree"></div>
+          </div>
+
+          <div class="spacer"></div>
+
+          <button id="cloud-card" class="cloud-card" data-testid="cloud-card" type="button">
+            <div class="cloud-card-head">
+              <span class="cloud-dot" aria-hidden="true"></span>
+              <strong data-t="cloudTitle">Studio in der Cloud</strong>
+            </div>
+            <span id="cloud-path-short" class="cloud-path muted small"></span>
+            <span id="cloud-status-text" class="cloud-meta small" data-t="cloudSynced">Synchronisiert</span>
+          </button>
+        </aside>
+
+        <div class="library-main">
+          <header class="topbar">
+            <button id="btn-toggle-sidebar" class="icon-btn" data-testid="btn-toggle-sidebar" aria-expanded="true" data-t-title="toggleSidebar" aria-label="Seitenleiste ein-/ausblenden">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16" /></svg>
+            </button>
+            <input id="search" class="search" type="search" data-testid="library-search" data-t-placeholder="search" aria-label="Notizen durchsuchen">
+            <select id="library-sort" class="select-input" data-testid="library-sort" aria-label="Sortierung">
+              <option value="UPDATED_DESC" data-t="sortUpdated">Zuletzt geändert</option>
+              <option value="CREATED_DESC" data-t="sortCreated">Zuletzt erstellt</option>
+              <option value="TITLE_ASC" data-t="sortTitle">Titel (A–Z)</option>
+            </select>
+            <div class="spacer"></div>
+            <button id="btn-refresh-lib" class="icon-btn" data-t-title="refresh" aria-label="Aktualisieren">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 10-2.3 5.7M20 4v7h-7" /></svg>
+            </button>
+            <button id="btn-open-pdf" class="btn ghost">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h8l6 6v14H6z M14 2v6h6" /></svg>
+              <span data-t="openPdf">PDF öffnen</span>
+            </button>
+            <button id="btn-new" class="btn primary" data-testid="btn-create-notebook">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+              <span data-t="newNotebook">Neues Notizbuch</span>
+            </button>
+          </header>
+
+          <div class="folder-bar">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h7l2 2h9v11H3z" /></svg>
+            <span id="folder-path" class="folder-path"></span>
+            <button id="btn-reveal" class="link" data-t="showFolder">Im Explorer zeigen</button>
+            <button id="btn-change-folder" class="link" data-t="changeFolder">Ordner ändern</button>
+          </div>
+
+          <div id="grid" class="grid" data-testid="notebook-grid"></div>
+
+          <div id="empty" class="empty" hidden>
+            <div class="empty-art" aria-hidden="true"></div>
+            <h2 id="empty-title" data-t="emptyLibraryTitle">Noch keine Notizbücher hier</h2>
+            <p id="empty-text" class="muted" data-t="emptyLibraryText"></p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Editor View -->
+    <section id="editor" class="screen editor-screen" data-testid="editor-view" hidden>
+      <header class="toolbar">
+        <button id="btn-back" class="icon-btn" data-t-title="back" aria-label="Zurück zur Bibliothek">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>
+        </button>
+        <div class="title-wrap">
+          <div id="nb-title" class="nb-title" data-testid="editor-title"></div>
+          <div id="save-status" class="save-status"></div>
+        </div>
+
+        <div id="study-banner" class="study-banner" hidden>
+          <span class="badge-pill" data-t="studyMode">Lern-Modus</span>
+          <button id="btn-study-reveal-all" class="btn small ghost" data-t="studyRevealAll">Alle aufdecken</button>
+          <button id="btn-study-hide-all" class="btn small ghost" data-t="studyHideAll">Alle verdecken</button>
+        </div>
+
+        <div id="reading-banner" class="study-banner" hidden>
+          <span class="badge-pill" data-t="readingMode">Lesemodus</span>
+          <button id="btn-exit-reading" class="btn small ghost" data-t="close">Beenden</button>
+        </div>
+
+        <button id="btn-center-canvas" class="btn small ghost" data-t="centerCanvas" hidden>Zur Mitte</button>
+
+        <div class="spacer"></div>
+
+        <button id="btn-refresh" class="icon-btn" data-t-title="refreshNotebook" aria-label="Neue Version vom Handy suchen">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 10-2.3 5.7M20 4v7h-7" /></svg>
+        </button>
+        <button id="btn-undo" class="icon-btn" data-testid="btn-undo" data-t-title="undo" aria-label="Rückgängig">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14L4 9l5-5M4 9h10a6 6 0 010 12h-3" /></svg>
+        </button>
+        <button id="btn-redo" class="icon-btn" data-testid="btn-redo" data-t-title="redo" aria-label="Wiederholen">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 14l5-5-5-5M20 9H10a6 6 0 000 12h3" /></svg>
+        </button>
+        <div class="sep"></div>
+        <button id="btn-audio" class="icon-btn" data-testid="btn-audio" data-t-title="audioTitle" aria-label="Vorlesungs-Audio">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5 10a7 7 0 0014 0M12 17v4M8 21h8" /></svg>
+        </button>
+        <button id="btn-ocr" class="icon-btn" data-testid="btn-ocr" data-t-title="ocrPage" aria-label="Handschrift erkennen (OCR)">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7V4h3M20 7V4h-3M4 17v3h3M20 17v3h-3M7 12h10M9 8h6M9 16h4" /></svg>
+        </button>
+        <button id="btn-page-sorter" class="icon-btn" data-testid="btn-page-sorter" data-t-title="pageSorter" aria-label="Seiten-Übersicht">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="7" height="7" rx="1" /><rect x="14" y="4" width="7" height="7" rx="1" /><rect x="3" y="13" width="7" height="7" rx="1" /><rect x="14" y="13" width="7" height="7" rx="1" /></svg>
+        </button>
+        <button id="btn-layers" class="icon-btn" data-testid="btn-layers" data-t-title="layers" aria-label="Ebenen">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l9 5-9 5-9-5z M3 13l9 5 9-5" /></svg>
+        </button>
+        <button id="btn-split-screen" class="icon-btn" data-testid="btn-split-screen" data-t-title="splitScreen" aria-label="Split-Screen">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M12 4v16" /></svg>
+        </button>
+        <button id="btn-more" class="icon-btn" data-testid="btn-more-menu" data-t-title="moreActions" aria-label="Weitere Aktionen">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="12" cy="19" r="1.6" /></svg>
+        </button>
+      </header>
+
+      <!-- Lecture Audio Bar -->
+      <div id="audio-bar" class="audio-bar" data-testid="audio-bar" hidden>
+        <button id="btn-audio-record" class="btn small danger" data-t="audioRecord">Aufnehmen</button>
+        <button id="btn-audio-play" class="btn small ghost" data-t="audioPlay">Abspielen</button>
+        <span id="audio-time" class="audio-time">00:00 / 00:00</span>
+        <select id="audio-entry-select" class="select-input small" aria-label="Audioaufnahme"></select>
+        <select id="audio-rate-select" class="select-input small" aria-label="Geschwindigkeit">
+          <option value="0.75">0.75×</option>
+          <option value="1" selected>1×</option>
+          <option value="1.25">1.25×</option>
+          <option value="1.5">1.5×</option>
+          <option value="2">2×</option>
+        </select>
+        <button id="btn-audio-jump" class="btn small ghost" aria-pressed="false" data-t="audioJumpMode">Stift-Sprung</button>
+        <span id="audio-status-msg" class="muted small"></span>
+      </div>
+
+      <div class="workspace">
+        <div id="stage" class="stage" data-testid="pane-primary">
+          <canvas id="view" class="view"></canvas>
+          <canvas id="wet" class="wet"></canvas>
+          <div id="geodreieck-overlay" class="geodreieck-overlay" data-testid="geodreieck-overlay" hidden>
+            <span class="geo-angle-label">0°</span>
+          </div>
+        </div>
+
+        <div id="split-resizer" class="split-resizer" data-testid="split-resizer" role="separator" aria-orientation="vertical" hidden></div>
+
+        <div id="stage-secondary" class="stage secondary-stage" data-testid="pane-secondary" hidden>
+          <div id="split-pane-header" class="split-pane-header" data-testid="split-pane-header">
+            <select id="split-nb-select" class="select-input small split-nb-select" data-testid="split-nb-select" aria-label="Notizbuch für rechten Bereich wählen"></select>
+            <span id="split-sync-badge" class="split-sync-badge" data-testid="split-sync-badge">Live-Sync</span>
+            <span id="split-page-label" class="muted small split-page-label">1 / 1</span>
+            <button type="button" id="btn-close-split" class="icon-btn small" data-testid="btn-close-split" data-t-title="close" aria-label="Split-Screen schließen">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
+            </button>
+          </div>
+          <canvas class="view"></canvas>
+          <canvas class="wet"></canvas>
+          <div class="geodreieck-overlay" hidden>
+            <span class="geo-angle-label">0°</span>
+          </div>
+        </div>
+
+        <!-- Layers Panel -->
+        <aside id="layers-panel" class="panel" data-testid="layers-panel" aria-label="Ebenen" hidden>
+          <div class="panel-head">
+            <span data-t="layers">Ebenen</span>
+            <button id="btn-add-layer" class="icon-btn small" data-t-title="addLayer" aria-label="Ebene hinzufügen">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+            </button>
+          </div>
+          <div id="layer-list" class="layer-list"></div>
+        </aside>
+
+        <!-- Page Sorter Drawer -->
+        <aside id="page-sorter-drawer" class="panel page-sorter-drawer" data-testid="page-sorter-drawer" aria-label="Seiten-Übersicht" hidden>
+          <div class="panel-head">
+            <span data-t="pageSorter">Seiten-Übersicht</span>
+            <span id="sorter-page-count" class="badge">1 / 1</span>
+          </div>
+          <div class="sorter-controls">
+            <button id="btn-sorter-add" class="btn small primary" data-t="addPage">Seite hinzufügen</button>
+            <button id="btn-sorter-dup" class="btn small ghost" data-t="duplicatePage">Seite duplizieren</button>
+            <button id="btn-sorter-bm" class="btn small ghost" data-t="bookmarkPage">Lesezeichen</button>
+            <button id="btn-sorter-del" class="btn small ghost" data-t="deletePage">Seite löschen</button>
+            <label class="field compact">
+              <span data-t="pageTemplate">Papiervorlage ändern</span>
+              <select id="sorter-tpl-select" class="select-input small" aria-label="Papiervorlage ändern"></select>
+            </label>
+          </div>
+          <div id="sorter-list" class="sorter-list"></div>
+        </aside>
+
+        <!-- Floating Lasso Selection Action Bar -->
+        <div id="lasso-bar" class="lasso-bar" hidden>
+          <button id="btn-delete-sel" class="btn danger small" data-t="deleteSelection">Löschen</button>
+          <button id="btn-dup-sel" class="btn ghost small" data-t="duplicateSelection">Duplizieren</button>
+          <button id="btn-recolor-sel" class="btn ghost small" data-t="recolorSelection">Umfärben</button>
+          <button id="btn-ocr-sel" class="btn ghost small" data-t="ocrSelection">Handschrift → Text</button>
+        </div>
+
+        <!-- Floating Bottom Dock -->
+        <div id="bottom-dock" class="bottom-dock" data-testid="bottom-dock">
+          <div id="favorite-pens-bar" class="favorite-pens-bar" data-testid="favorite-pens-bar"></div>
+
+          <div class="dock-main">
+            <div id="tools" class="tools">
+              <button class="tool active" data-testid="tool-pen" data-tool-group="pen" data-tool="FOUNTAIN_PEN" aria-pressed="true" data-t-title="tool_FOUNTAIN_PEN" aria-label="Füller">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l4 8-4 12-4-12z M12 10v4" /></svg>
+                <span class="swatch"></span>
+              </button>
+              <button class="tool" data-testid="tool-highlighter" data-tool="HIGHLIGHTER" aria-pressed="false" data-t-title="tool_HIGHLIGHTER" aria-label="Textmarker">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14l6-6 3 3-6 6H9z M9 17l-4 4h6" /></svg>
+                <span class="swatch"></span>
+              </button>
+              <button class="tool" data-testid="tool-eraser" data-tool="ERASER" aria-pressed="false" data-t-title="tool_ERASER" aria-label="Radierer">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 16l9-9 6 6-7 7H8z M9 20h11" /></svg>
+              </button>
+              <button class="tool" data-testid="tool-lasso" data-tool="LASSO" aria-pressed="false" data-t-title="tool_LASSO" aria-label="Lasso">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4c5 0 9 2.5 9 5.5S17 15 12 15 3 12.5 3 9.5 7 4 12 4z M6 14c-1 2 0 4 2 5" stroke-dasharray="3 2" /></svg>
+              </button>
+              <button class="tool" data-testid="tool-tape" data-tool="TAPE_OCCLUSION" aria-pressed="false" data-t-title="tool_TAPE_OCCLUSION" aria-label="Lern-Abdeckband">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="8" width="18" height="8" rx="2" /><path d="M8 8l-3 8M14 8l-3 8M19 8l-3 8" /></svg>
+                <span class="swatch"></span>
+              </button>
+              <button class="tool" data-testid="tool-textbox" data-tool="TEXT_BOX" aria-pressed="false" data-t-title="tool_TEXT_BOX" aria-label="Textbox / Sticky Note">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M8 9h8M12 9v7" /></svg>
+              </button>
+              <button class="tool" data-testid="tool-image" data-tool="IMAGE" aria-pressed="false" data-t-title="tool_IMAGE" aria-label="Bild einfügen">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" /><circle cx="8.5" cy="9.5" r="1.5" /><path d="M21 15l-5-5L5 20" /></svg>
+              </button>
+              <button class="tool" data-testid="tool-laser" data-tool="LASER" aria-pressed="false" data-t-title="tool_LASER" aria-label="Laserpointer">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" /><path d="M12 2v4M12 18v4M2 12h4M18 12h4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M19.1 4.9l-2.8 2.8M7.7 16.3l-2.8 2.8" /></svg>
+              </button>
+              <button class="tool" data-testid="tool-hand" data-tool="HAND" aria-pressed="false" data-t-title="tool_HAND" aria-label="Verschieben">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 12V5a1.5 1.5 0 013 0v6 M11 11V4a1.5 1.5 0 013 0v7 M14 11V6a1.5 1.5 0 013 0v8c0 4-3 7-7 7-3 0-5-2-6-4l-2-4a1.5 1.5 0 012.6-1.5L8 14" /></svg>
+              </button>
+              <button class="tool" data-testid="tool-geodreieck" data-tool="GEODREIECK" aria-pressed="false" data-t-title="geodreieck" aria-label="Geodreieck">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 19L12 6l9 13z" /></svg>
+              </button>
+            </div>
+
+            <div class="sep"></div>
+            <div id="tool-options" class="tool-options"></div>
+            <div class="sep"></div>
+
+            <div class="page-nav">
+              <button id="btn-zoom-out" class="icon-btn small" data-t-title="zoomOut" aria-label="Verkleinern">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14" /></svg>
+              </button>
+              <button id="btn-fit" class="pill" data-t-title="fitWidth" aria-label="Seitenbreite"><span id="zoom-label">100 %</span></button>
+              <button id="btn-zoom-in" class="icon-btn small" data-t-title="zoomIn" aria-label="Vergrößern">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+              </button>
+              <span class="sep"></span>
+              <span id="page-label" class="page-label">1 / 1</span>
+              <button id="btn-add-page" class="icon-btn small" data-t-title="addPage" aria-label="Seite hinzufügen">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h8l6 6v14H6z M13 12v6M10 15h6" /></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- More Menu -->
+      <div id="more-menu" class="menu" role="menu" data-testid="more-menu" hidden>
+        <button id="menu-dark-paper" role="menuitem" data-t="darkPaper">Dark Paper (Nachtpapier)</button>
+        <button id="menu-margin-notes" role="menuitem" data-t="marginNotes">PDF-Notizrand</button>
+        <button id="menu-study-mode" role="menuitem" data-t="studyMode">Lern-Modus (Abdeckbänder)</button>
+        <button id="menu-reading-mode" role="menuitem" data-t="readingMode">Lese- / Präsentationsmodus</button>
+        <button id="menu-append-pdf" role="menuitem" data-t="appendPdf">PDF-Seiten anhängen</button>
+        <button id="menu-export" role="menuitem" data-t="exportPdf">Exportieren (PDF / PNG / Bundle)</button>
+        <button id="menu-fullscreen" role="menuitem" data-t="fullscreen">Vollbild (F11)</button>
+      </div>
+    </section>
+  </main>
+
+  <!-- Hidden File Input for Playwright / Browser Image Chooser Support -->
+  <input id="hidden-image-input" type="file" accept="image/png,image/jpeg,image/webp" hidden>
+
+  <!-- New Notebook Modal -->
+  <dialog id="modal-new-notebook" class="dialog" role="dialog" data-testid="modal-new-notebook">
+    <form method="dialog" id="form-new-notebook">
+      <h2 data-t="newNotebookTitle">Neues Notizbuch</h2>
+      <label class="field">
+        <span data-t="titleLabel">Titel</span>
+        <input id="new-nb-title" name="title" type="text" maxlength="80" placeholder="Mathe – Analysis">
+      </label>
+      <div class="field-row">
+        <label class="field">
+          <span data-t="templateLabel">Papiervorlage</span>
+          <select id="new-nb-template" class="select-input"></select>
+        </label>
+        <label class="field">
+          <span data-t="canvasModeLabel">Seitenmodus</span>
+          <select id="new-nb-mode" class="select-input">
+            <option value="PAGES" data-t="canvasModePages">Seiten (A4)</option>
+            <option value="INFINITE" data-t="canvasModeInfinite">Endlos-Fläche (Infinite)</option>
+          </select>
+        </label>
+      </div>
+      <div class="field">
+        <span data-t="coverColorLabel">Einbandfarbe</span>
+        <div id="new-nb-colors" class="color-row"></div>
+      </div>
       <div class="dialog-actions">
-        <button value="cancel" class="btn ghost" data-t="cancel" formnovalidate></button>
-        <button value="ok" id="dialog-ok" class="btn primary" data-t="ok"></button>
+        <button type="button" id="btn-cancel-new-nb" class="btn ghost" data-t="cancel">Abbrechen</button>
+        <button type="submit" id="btn-confirm-new-nb" class="btn primary" data-t="create">Erstellen</button>
       </div>
     </form>
   </dialog>
 
-  <div id="toast" class="toast" hidden></div>
+  <!-- Textbox / Sticky Note / Checklist Modal -->
+  <dialog id="modal-textbox" class="dialog" role="dialog" data-testid="modal-textbox">
+    <form method="dialog" id="form-textbox">
+      <h2 data-t="textBoxTitle">Textbox / Haftnotiz</h2>
+      <label class="field">
+        <span data-t="textPlaceholder">Notiz eingeben …</span>
+        <textarea id="tb-text" rows="4" data-t-placeholder="textPlaceholder"></textarea>
+      </label>
+      <div class="field-row">
+        <label class="check">
+          <input id="tb-checklist" type="checkbox">
+          <span data-t="checklist">Checkliste</span>
+        </label>
+        <label class="check">
+          <input id="tb-bold" type="checkbox">
+          <span data-t="bold">Fett</span>
+        </label>
+        <label class="check">
+          <input id="tb-italic" type="checkbox">
+          <span data-t="italic">Kursiv</span>
+        </label>
+      </div>
+      <div class="field">
+        <span data-t="bgColor">Hintergrund</span>
+        <div id="tb-bg-colors" class="color-row"></div>
+      </div>
+      <div class="dialog-actions">
+        <button type="button" id="btn-cancel-tb" class="btn ghost" data-t="cancel">Abbrechen</button>
+        <button type="submit" id="btn-apply-tb" class="btn primary" data-t="updateTextBox">Übernehmen</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Export Studio Modal -->
+  <dialog id="modal-export" class="dialog" role="dialog" data-testid="modal-export">
+    <form method="dialog" id="form-export">
+      <h2 data-t="exportTitle">Exportieren</h2>
+      <div class="field">
+        <span>Format</span>
+        <div class="radio-group">
+          <label class="radio-card"><input type="radio" name="exportFormat" value="pdf" checked><span data-t="exportFormatPdf">Vektor-PDF (empfohlen)</span></label>
+          <label class="radio-card"><input type="radio" name="exportFormat" value="png"><span data-t="exportFormatPng">PNG-Bild (aktuelle Seite)</span></label>
+          <label class="radio-card"><input type="radio" name="exportFormat" value="docflownote"><span data-t="exportFormatBundle">DocFlow-Kopie (.docflownote)</span></label>
+        </div>
+      </div>
+      <div class="field">
+        <span data-t="exportLayerModeLabel">Ebenen-Auswahl</span>
+        <div class="radio-group">
+          <label class="radio-card"><input type="radio" name="exportLayerMode" value="ALL_VISIBLE" checked><span data-t="exportAllVisible">Alle sichtbaren Ebenen</span></label>
+          <label class="radio-card"><input type="radio" name="exportLayerMode" value="ALL_LAYERS"><span data-t="exportAllLayers">Alle Ebenen</span></label>
+          <label class="radio-card"><input type="radio" name="exportLayerMode" value="BLANK_WORKSHEET_ONLY"><span data-t="exportBlankWorksheet">Nur Hintergrund (Blanko zum Üben)</span></label>
+          <label class="radio-card"><input type="radio" name="exportLayerMode" value="ONLY_SOLUTIONS"><span data-t="exportOnlySolutions">Ohne Hintergrund (Nur eigene Notizen)</span></label>
+        </div>
+      </div>
+      <div class="field-row">
+        <label class="check"><input id="exp-include-tapes" type="checkbox" checked><span data-t="exportIncludeTapes">Lern-Abdeckbänder einschließen</span></label>
+        <label class="check"><input id="exp-dark-paper" type="checkbox"><span data-t="exportDarkPaper">Dark Paper im Export beibehalten</span></label>
+      </div>
+      <div class="dialog-actions">
+        <button type="button" id="btn-cancel-export" class="btn ghost" data-t="cancel">Abbrechen</button>
+        <button type="submit" id="btn-confirm-export" class="btn primary" data-t="exportAction">Exportieren …</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- 2-Column Settings Modal -->
+  <dialog id="modal-settings" class="dialog dialog-wide" role="dialog" data-testid="modal-settings">
+    <div class="settings-layout">
+      <div class="settings-head">
+        <h2 data-t="settings">Einstellungen</h2>
+      </div>
+      <div class="settings-grid">
+        <label class="field">
+          <span data-t="themeLabel">Farbschema</span>
+          <select id="set-theme" class="select-input">
+            <option value="anthracite" data-t="themeAnthracite">Anthracite Dark (Android)</option>
+            <option value="light" data-t="themeLight">Crisp Editorial Light</option>
+            <option value="oled" data-t="themeOled">Pure OLED Schwarz</option>
+          </select>
+        </label>
+        <label class="field">
+          <span data-t="languageLabel">Sprache</span>
+          <select id="set-lang" class="select-input">
+            <option value="de" data-t="langDe">Deutsch</option>
+            <option value="en" data-t="langEn">English</option>
+            <option value="auto" data-t="langAuto">Automatisch</option>
+          </select>
+        </label>
+        <label class="field">
+          <span data-t="sideButtonLabel">S-Pen Seitentaste</span>
+          <select id="set-side-btn" class="select-input">
+            <option value="ERASER" data-t="sideAction_ERASER">Radierer (gedrückt halten)</option>
+            <option value="LASSO" data-t="sideAction_LASSO">Lasso</option>
+            <option value="UNDO" data-t="sideAction_UNDO">Rückgängig</option>
+            <option value="RADIAL_MENU" data-t="sideAction_RADIAL_MENU">S-Pen Radial-Menü</option>
+          </select>
+        </label>
+        <div class="field checks-group">
+          <label class="check"><input id="set-finger" type="checkbox"><span data-t="fingerDraws">Mit dem Finger zeichnen</span></label>
+          <label class="check"><input id="set-hold-snap" type="checkbox" checked><span data-t="holdToSnap">Hold-to-Snap Formerkennung</span></label>
+          <label class="check"><input id="set-scribble" type="checkbox" checked><span data-t="scribbleToErase">Durchstreichen zum Radieren (Scribble-to-Erase)</span></label>
+        </div>
+      </div>
+      <div class="settings-footer">
+        <div class="update-box">
+          <button type="button" id="btn-check-updates" class="btn ghost small" data-t="checkUpdates">Nach Updates suchen</button>
+          <button type="button" id="btn-update-download" class="btn primary small" data-t="updateDownload" hidden>Auf GitHub öffnen</button>
+          <button type="button" id="btn-open-backups" class="btn ghost small" data-t="openBackups">Auto-Backup-Ordner öffnen</button>
+          <span id="update-status-text" class="muted small"></span>
+        </div>
+        <button type="button" id="btn-close-settings" class="btn primary" data-t="close">Schließen</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Cloud Sync Overview Modal -->
+  <dialog id="modal-cloud" class="dialog" role="dialog" data-testid="modal-cloud">
+    <h2 data-t="cloudTitle">Studio in der Cloud</h2>
+    <p class="muted" data-t="cloudOverviewHint"></p>
+    <div class="cloud-details">
+      <div class="cloud-row"><span data-t="cloudFolderLabel">Sync-Ordner</span><strong id="cloud-modal-path"></strong></div>
+      <div class="cloud-row"><span data-t="cloudSynced">Synchronisiert</span><span id="cloud-modal-count"></span></div>
+    </div>
+    <div id="cloud-modal-list" class="cloud-modal-list"></div>
+    <div class="dialog-actions">
+      <button type="button" id="btn-cloud-sync-now" class="btn ghost" data-t="cloudSyncNow">Jetzt abgleichen</button>
+      <button type="button" id="btn-close-cloud" class="btn primary" data-t="close">Schließen</button>
+    </div>
+  </dialog>
+
+  <!-- Offline OCR Modal -->
+  <dialog id="modal-ocr" class="dialog" role="dialog" data-testid="modal-ocr">
+    <h2 data-t="ocrResultTitle">Erkannte Handschrift</h2>
+    <textarea id="ocr-result-text" class="ocr-textarea" rows="6"></textarea>
+    <div class="dialog-actions">
+      <button type="button" id="btn-ocr-copy" class="btn ghost" data-t="ocrCopy">Kopieren</button>
+      <button type="button" id="btn-ocr-insert-box" class="btn ghost" data-t="ocrInsertBox">Als Textbox einfügen</button>
+      <button type="button" id="btn-close-ocr" class="btn primary" data-t="close">Schließen</button>
+    </div>
+  </dialog>
+
+  <!-- 30-Day Trash Modal -->
+  <dialog id="modal-trash" class="dialog dialog-wide" role="dialog" data-testid="modal-trash">
+    <div class="panel-head">
+      <h2 data-t="trash">Papierkorb</h2>
+      <button type="button" id="btn-empty-trash" class="btn danger small" data-t="emptyTrash">Papierkorb leeren</button>
+    </div>
+    <p class="muted small" data-t="emptyTrashText"></p>
+    <div id="trash-list" class="trash-list"></div>
+    <div class="dialog-actions">
+      <button type="button" id="btn-close-trash" class="btn primary" data-t="close">Schließen</button>
+    </div>
+  </dialog>
+
+  <!-- Command Palette (Ctrl+K) -->
+  <dialog id="command-palette" class="dialog command-palette" role="dialog" data-testid="command-palette">
+    <div class="palette-head">
+      <input id="palette-input" type="search" data-t-placeholder="commandPalettePlaceholder" aria-label="Befehlspalette Suche">
+    </div>
+    <div id="palette-results" class="palette-results"></div>
+  </dialog>
+
+  <!-- Generic Prompt / Confirm Dialog -->
+  <dialog id="dialog" class="dialog" role="dialog">
+    <form method="dialog" id="dialog-form">
+      <h2 id="dialog-title"></h2>
+      <div id="dialog-body"></div>
+      <div class="dialog-actions">
+        <button type="button" id="dialog-cancel" value="cancel" class="btn ghost" data-t="cancel">Abbrechen</button>
+        <button type="submit" value="ok" id="dialog-ok" class="btn primary" data-t="ok">OK</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
   <script type="module" src="js/app.js"></script>
 </body>
 </html>

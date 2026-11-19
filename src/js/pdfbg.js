@@ -1,5 +1,6 @@
-// PDF backgrounds (worksheets, scans) rendered with pdf.js. Rasters are cached per page and
-// resolution bucket so scrolling never re-renders, and zooming in swaps to a sharper raster.
+// PDF backgrounds (worksheets, scans) rendered with pdf.js + full-text extraction for search.
+// Rasters are cached per page and resolution bucket so scrolling never re-renders, and zooming in
+// swaps cleanly to a sharper raster.
 
 import * as pdfjs from '../vendor/pdf.min.mjs';
 
@@ -21,6 +22,7 @@ export class PdfBackgrounds {
   constructor() {
     this.docs = new Map(); // entry name → Promise<PDFDocumentProxy>
     this.rasters = new Map(); // `${entry}#${page}@${bucket}` → ImageBitmap | Promise
+    this.textCache = new Map(); // `${entry}#${page}` → string
   }
 
   setSource(entries) {
@@ -72,7 +74,23 @@ export class PdfBackgrounds {
     return canvas.transferToImageBitmap();
   }
 
-  /** Page sizes in PDF points, used when a PDF is turned into a new notebook. */
+  /** Extracts selectable text from a PDF page for global search & OCR enrichment. */
+  async extractPageText(entry, pageIndex) {
+    const key = `${entry}#${pageIndex}`;
+    if (this.textCache.has(key)) return this.textCache.get(key);
+    try {
+      const doc = await this.document(entry);
+      const page = await doc.getPage(Math.min(doc.numPages, Math.max(1, pageIndex + 1)));
+      const content = await page.getTextContent();
+      const text = content.items.map((it) => it.str || '').join(' ').replace(/\s+/g, ' ').trim();
+      this.textCache.set(key, text);
+      return text;
+    } catch {
+      return '';
+    }
+  }
+
+  /** Page sizes in PDF points, used when a PDF is turned into a new notebook or appended. */
   static async pageSizes(bytes) {
     const doc = await pdfjs.getDocument({ ...DOC_OPTIONS, data: bytes.slice() }).promise;
     const sizes = [];
@@ -89,5 +107,6 @@ export class PdfBackgrounds {
     for (const r of this.rasters.values()) if (r && !(r instanceof Promise)) r.close?.();
     this.docs.clear();
     this.rasters.clear();
+    this.textCache.clear();
   }
 }

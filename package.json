@@ -1,23 +1,26 @@
 {
   "name": "docflow-studio-windows",
   "productName": "DocFlow Studio",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "DocFlow Studio für Windows – Notizbücher vom Handy mit dem Stift bearbeiten",
   "main": "main.js",
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
     "postinstall": "node scripts/vendor.mjs",
+    "build:icons": "node scripts/make-icon.mjs",
     "start": "electron .",
     "test": "node --test test/*.test.mjs",
+    "test:e2e": "playwright test",
     "dist": "electron-builder --win nsis portable --x64"
   },
   "devDependencies": {
+    "@playwright/test": "^1.65.1",
+    "electron": "45.2.2",
+    "electron-builder": "26.18.0",
     "fflate": "0.8.3",
     "pdf-lib": "1.17.1",
-    "pdfjs-dist": "6.4.299",
-    "electron": "45.2.2",
-    "electron-builder": "26.18.0"
+    "pdfjs-dist": "6.4.299"
   },
   "build": {
     "appId": "app.docflow.studio.windows",
@@ -26,14 +29,20 @@
       "main.js",
       "preload.js",
       "src/**/*",
+      "build/icon.ico",
       "!src/**/*.map",
-      "!src/js/demo-bridge.js"
+      "!test/**",
+      "!e2e/**",
+      "!playwright.config.*",
+      "!playwright-report/**",
+      "!test-results/**"
     ],
+    "electronDist": "node_modules/electron/dist",
     "directories": {
       "output": "dist"
     },
     "win": {
-      "icon": "build/icon.png",
+      "icon": "build/icon.ico",
       "target": [
         "nsis",
         "portable"
@@ -50,7 +59,8 @@
       {
         "ext": "docflownote",
         "name": "DocFlow Notizbuch",
-        "description": "DocFlow Studio Notizbuch"
+        "description": "DocFlow Studio Notizbuch",
+        "icon": "build/icon.ico"
       }
     ],
     "portable": {
